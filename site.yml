@@ -1,0 +1,5 @@
+- name: Setup workstation
+  hosts: local
+  become: true
+  roles:
+    - resolve

@@ -1,0 +1,132 @@
+- name: Assert Resolve installer exists (you must download it manually)
+  ansible.builtin.stat:
+    path: "{{ resolve_installer_run }}"
+  register: resolve_installer
+  become: false
+
+- name: Fail if installer missing
+  ansible.builtin.fail:
+    msg: |
+      Missing {{ resolve_installer_run }}.
+      Download DaVinci Resolve Studio for Linux from Blackmagic Support and place it in ./files/
+      Example expected name:
+        DaVinci_Resolve_Studio_20.3.2_Linux.run
+  when: not resolve_installer.stat.exists
+
+- name: Install build + runtime dependencies for MakeResolveDeb + Resolve
+  ansible.builtin.apt:
+    name:
+      - fakeroot
+      - xorriso
+      - patchelf
+      - unzip
+      - curl
+      - wget
+      - ocl-icd-libopencl1
+      - clinfo
+      - mesa-opencl-icd
+      - libglu1-mesa
+      - libxcrypt-compat
+      - libxcb-cursor0
+      - libxcb-xinerama0
+      - libxkbcommon-x11-0
+      - mesa-utils
+      - libapr1
+      - libaprutil1
+    state: present
+    update_cache: true
+
+- name: Install libssl1.1 (if not already installed)
+  block:
+    - name: Check if libssl1.1 installed
+      ansible.builtin.command: dpkg-query -W -f='${Status}\n' libssl1.1
+      register: libssl11_status
+      changed_when: false
+      failed_when: false
+
+    - name: Download libssl1.1 deb
+      ansible.builtin.get_url:
+        url: "{{ libssl11_url }}"
+        dest: /tmp/libssl1.1_amd64.deb
+        mode: "0644"
+      when: libssl11_status.rc != 0
+
+    - name: Install libssl1.1 deb
+      ansible.builtin.apt:
+        deb: /tmp/libssl1.1_amd64.deb
+      when: libssl11_status.rc != 0
+
+  when: ansible_facts['architecture'] in ['x86_64','amd64']
+
+- name: Create working dir
+  ansible.builtin.file:
+    path: /opt/makeresolvedeb
+    state: directory
+    mode: "0755"
+
+- name: Download MakeResolveDeb
+  ansible.builtin.get_url:
+    url: "{{ makeresolvedeb_url }}"
+    dest: "/opt/makeresolvedeb/makeresolvedeb_{{ makeresolvedeb_version }}_multi.sh.tar.gz"
+    mode: "0644"
+
+- name: Extract MakeResolveDeb
+  ansible.builtin.unarchive:
+    src: "/opt/makeresolvedeb/makeresolvedeb_{{ makeresolvedeb_version }}_multi.sh.tar.gz"
+    dest: /opt/makeresolvedeb
+    remote_src: true
+
+- name: Copy Resolve installer into working dir (avoid permission weirdness)
+  ansible.builtin.copy:
+    src: "{{ resolve_installer_run }}"
+    dest: "/opt/makeresolvedeb/DaVinci_Resolve_Studio_Linux.run"
+    mode: "0755"
+    remote_src: false
+
+- name: Build Resolve .deb with MakeResolveDeb
+  ansible.builtin.command: >
+    bash -lc "./makeresolvedeb_{{ makeresolvedeb_version }}_multi.sh DaVinci_Resolve_Studio_Linux.run"
+  args:
+    chdir: /opt/makeresolvedeb
+
+- name: Find generated Resolve .deb
+  ansible.builtin.find:
+    paths: /opt/makeresolvedeb
+    patterns: "davinci-resolve-studio_*_amd64.deb"
+  register: resolve_deb
+
+- name: Fail if deb not produced
+  ansible.builtin.fail:
+    msg: "MakeResolveDeb did not generate a .deb. Check /opt/makeresolvedeb output."
+  when: resolve_deb.matched | int == 0
+
+- name: Install Resolve .deb
+  ansible.builtin.apt:
+    deb: "{{ (resolve_deb.files | sort(attribute='mtime'))[-1].path }}"
+
+- name: Resolve 20 Extras CA bundle symlink (optional)
+  when: resolve_extras_ca_symlink | bool
+  block:
+    - name: Ensure directory exists
+      ansible.builtin.file:
+        path: /etc/pki/tls/certs
+        state: directory
+        mode: "0755"
+    - name: Symlink CA bundle to RedHat path
+      ansible.builtin.file:
+        src: /etc/ssl/certs/ca-certificates.crt
+        dest: /etc/pki/tls/certs/ca-bundle.crt
+        state: link
+
+- name: Install a launcher wrapper (forces X11 QT backend)
+  ansible.builtin.template:
+    src: resolve-launcher.sh.j2
+    dest: /usr/local/bin/resolve
+    mode: "0755"
+
+- name: Show how to launch
+  ansible.builtin.debug:
+    msg: |
+      Installed. Launch with:
+        resolve
+      If you are on Wayland and see crashes, log out and pick "Linux Mint on Xorg".

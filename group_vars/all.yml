@@ -1,0 +1,19 @@
+# User-configurable variables
+# Place the Blackmagic installer .run file here (license requires you download it yourself):
+#   ./files/DaVinci_Resolve_Studio_20.3.2_Linux.run
+#
+# Then run:
+#   ./bootstrap.sh
+#   ansible-playbook -K site.yml
+
+resolve_installer_run: "{{ playbook_dir }}/files/DaVinci_Resolve_Studio_20.3.2_Linux.run"
+
+# MakeResolveDeb (turns the .run into a proper .deb for Ubuntu/Mint)
+makeresolvedeb_version: "1.8.3"
+makeresolvedeb_url: "https://www.danieltufvesson.com/download/?file=makeresolvedeb%2Fmakeresolvedeb_{{ makeresolvedeb_version }}_multi.sh.tar.gz"
+
+# Ubuntu pool libssl1.1 (Mint 22 / Ubuntu 24.04 often needs this for Resolve)
+libssl11_url: "https://nz2.archive.ubuntu.com/ubuntu/pool/main/o/openssl/libssl1.1_1.1.1f-1ubuntu2.24_amd64.deb"
+
+# Optional: Resolve 20 "Extras download" CA bundle path symlink fix
+resolve_extras_ca_symlink: true

@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Resolve tends to behave better on X11 than Wayland.
+export QT_QPA_PLATFORM=xcb
+
+exec /opt/resolve/bin/resolve "$@"
