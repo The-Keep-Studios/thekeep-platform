@@ -1,0 +1,82 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ localai_namespace }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: localai
+  namespace: {{ localai_namespace }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: localai
+  template:
+    metadata:
+      labels:
+        app: localai
+    spec:
+      containers:
+        - name: localai
+          image: {{ localai_image }}
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: {{ localai_port }}
+{% if localai_use_vulkan or localai_models_path_env %}
+          env:
+{% if localai_use_vulkan %}
+            - name: USE_VULKAN
+              value: "true"
+{% endif %}
+{% if localai_models_path_env %}
+            - name: MODELS_PATH
+              value: "{{ localai_models_path_env }}"
+{% endif %}
+{% else %}
+          env: []
+{% endif %}
+          resources:
+            requests:
+              cpu: "{{ localai_cpu_request }}"
+              memory: "{{ localai_mem_request }}"
+            limits:
+              cpu: "{{ localai_cpu_limit }}"
+              memory: "{{ localai_mem_limit }}"
+          volumeMounts:
+            - name: models
+              mountPath: "{{ localai_models_container_path }}"
+            - name: dri
+              mountPath: /dev/dri
+          readinessProbe:
+            tcpSocket:
+              port: {{ localai_port }}
+            initialDelaySeconds: 5
+            periodSeconds: 10
+      volumes:
+        - name: models
+          hostPath:
+            path: "{{ localai_models_host_path }}"
+            type: Directory
+        - name: dri
+          hostPath:
+            path: /dev/dri
+            type: Directory
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: localai
+  namespace: {{ localai_namespace }}
+spec:
+  type: {{ localai_service_type }}
+  selector:
+    app: localai
+  ports:
+    - name: http
+      port: {{ localai_port }}
+      targetPort: {{ localai_port }}
+{% if localai_service_type == "NodePort" %}
+      nodePort: {{ localai_nodeport }}
+{% endif %}

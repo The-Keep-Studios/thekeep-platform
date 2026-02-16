@@ -17,3 +17,24 @@ libssl11_url: "https://nz2.archive.ubuntu.com/ubuntu/pool/main/o/openssl/libssl1
 
 # Optional: Resolve 20 "Extras download" CA bundle path symlink fix
 resolve_extras_ca_symlink: true
+
+# k3s + LocalAI defaults
+enable_k3s: true
+enable_localai: true
+
+localai_namespace: localai
+localai_image: "localai/localai:latest"
+localai_port: 8080
+
+localai_use_vulkan: true
+localai_models_host_path: "/opt/localai/models"
+localai_models_container_path: "/models"
+localai_models_path_env: "/models"
+
+localai_service_type: ClusterIP
+localai_nodeport: 30880
+
+localai_cpu_request: "4"
+localai_mem_request: "16Gi"
+localai_cpu_limit: "16"
+localai_mem_limit: "64Gi"

@@ -29,6 +29,35 @@ Launch Resolve:
 resolve
 ```
 
+## LocalAI on k3s (Mint host)
+
+How to use:
+
+1) Bootstrap Ansible:
+
+```bash
+./bootstrap.sh
+```
+
+2) Install k3s + LocalAI:
+
+```bash
+ansible-playbook -K site.yml --tags k3s,localai
+```
+
+3) Check the pod:
+
+```bash
+kubectl -n localai get pods
+```
+
+4) Call LocalAI:
+
+- In-cluster: `http://localai.localai.svc.cluster.local:8080`
+- NodePort (if enabled): `http://<host-ip>:30880`
+
+Note: Vulkan support is enabled with `USE_VULKAN=true`.
+
 ## Notes
 
 - If you are on Wayland, Resolve may crash. Prefer an Xorg session ("Linux Mint on Xorg").

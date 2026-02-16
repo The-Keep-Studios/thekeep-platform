@@ -2,4 +2,11 @@
   hosts: local
   become: true
   roles:
-    - resolve
+    - role: resolve
+      tags: [resolve]
+    - role: k3s_host
+      tags: [k3s]
+      when: enable_k3s | bool
+    - role: localai_k8s
+      tags: [localai]
+      when: enable_localai | bool
