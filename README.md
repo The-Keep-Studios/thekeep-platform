@@ -15,6 +15,8 @@ Place it in:
 
 Blackmagic's licensing requires you fetch this yourself; this repo doesn't redistribute it.
 
+For macOS installs, place the Resolve Studio DMG in `./files/` (default pattern: `DaVinci_Resolve_Studio*.dmg`).
+
 ## Quick start
 
 ```bash
@@ -28,6 +30,14 @@ Launch Resolve:
 ```bash
 resolve
 ```
+
+macOS (local run):
+
+```bash
+ansible-playbook -K -i "localhost," -c local site.yml --tags resolve
+```
+
+Note: first launch may prompt for your Resolve Studio license activation.
 
 ## LocalAI on k3s (Mint host)
 

@@ -8,6 +8,13 @@
 
 resolve_installer_run: "{{ playbook_dir }}/files/DaVinci_Resolve_Studio_20.3.2_Linux.run"
 
+# macOS Resolve Studio installer (DMG in ./files)
+resolve_macos_app_path: "/Applications/DaVinci Resolve Studio.app"
+resolve_macos_dmg_path: ""
+resolve_macos_dmg_pattern: "DaVinci_Resolve_Studio*.dmg"
+resolve_macos_pkg_pattern: "DaVinci Resolve Studio*.pkg"
+resolve_macos_mountpoint: "/Volumes/ResolveStudio"
+
 # MakeResolveDeb (turns the .run into a proper .deb for Ubuntu/Mint)
 makeresolvedeb_version: "1.8.3"
 makeresolvedeb_url: "https://www.danieltufvesson.com/download/?file=makeresolvedeb%2Fmakeresolvedeb_{{ makeresolvedeb_version }}_multi.sh.tar.gz"

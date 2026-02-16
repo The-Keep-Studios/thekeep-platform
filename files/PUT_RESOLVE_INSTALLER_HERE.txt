@@ -1,1 +1,3 @@
-Place DaVinci_Resolve_Studio_20.3.2_Linux.run in this folder.
+Place the Resolve installer in this folder.
+- Linux: DaVinci_Resolve_Studio_20.3.2_Linux.run
+- macOS: DaVinci_Resolve_Studio*.dmg
