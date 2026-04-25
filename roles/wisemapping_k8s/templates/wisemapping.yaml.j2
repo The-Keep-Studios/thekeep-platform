@@ -1,0 +1,84 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ wisemapping_namespace }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: wisemapping-config
+  namespace: {{ wisemapping_namespace }}
+data:
+  application.yml: |-
+    spring:
+      datasource:
+        url: "{{ wisemapping_datasource_url }}"
+        driver-class-name: "{{ wisemapping_datasource_driver }}"
+        username: "{{ wisemapping_datasource_username }}"
+        password: "{{ wisemapping_datasource_password }}"
+      jpa:
+        hibernate:
+          ddl-auto: "{{ wisemapping_jpa_ddl_auto }}"
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ wisemapping_pvc_name }}
+  namespace: {{ wisemapping_namespace }}
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: {{ wisemapping_storage_class }}
+  resources:
+    requests:
+      storage: "{{ wisemapping_storage_size }}"
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: wisemapping
+  namespace: {{ wisemapping_namespace }}
+  labels:
+    app: wisemapping
+spec:
+  containers:
+    - name: wisemapping
+      image: {{ wisemapping_image }}
+      imagePullPolicy: IfNotPresent
+      ports:
+        - name: http
+          containerPort: {{ wisemapping_container_port }}
+      volumeMounts:
+        - name: db
+          mountPath: /var/lib/wisemapping
+        - name: app-config
+          mountPath: /app/config/application.yml
+          subPath: application.yml
+          readOnly: true
+  volumes:
+    - name: db
+      persistentVolumeClaim:
+        claimName: {{ wisemapping_pvc_name }}
+    - name: app-config
+      configMap:
+        name: wisemapping-config
+        items:
+          - key: application.yml
+            path: application.yml
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: wisemapping
+  namespace: {{ wisemapping_namespace }}
+spec:
+  type: {{ wisemapping_service_type }}
+  selector:
+    app: wisemapping
+  ports:
+    - name: http
+      port: {{ wisemapping_service_port }}
+      targetPort: http
+{% if wisemapping_service_type == "NodePort" %}
+      nodePort: {{ wisemapping_nodeport }}
+{% endif %}

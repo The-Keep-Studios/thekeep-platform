@@ -28,6 +28,7 @@ resolve_extras_ca_symlink: true
 # k3s + LocalAI defaults
 enable_k3s: true
 enable_localai: true
+enable_wisemapping: true
 
 localai_namespace: localai
 localai_image: "localai/localai:latest"
@@ -45,3 +46,23 @@ localai_cpu_request: "4"
 localai_mem_request: "16Gi"
 localai_cpu_limit: "16"
 localai_mem_limit: "64Gi"
+
+# k3s + Wisemapping defaults
+wisemapping_namespace: wisemapping
+wisemapping_manifest_dir: "/opt/wisemapping"
+wisemapping_image: "wisemapping/wisemapping:latest"
+
+wisemapping_pvc_name: "wisemapping-db"
+wisemapping_storage_class: "local-path"
+wisemapping_storage_size: "5Gi"
+
+wisemapping_container_port: 80
+wisemapping_service_port: 80
+wisemapping_service_type: NodePort
+wisemapping_nodeport: 30080
+
+wisemapping_datasource_url: "jdbc:hsqldb:file:/var/lib/wisemapping/db/wisemapping;sql.names=false;sql.regular_names=false;shutdown=true"
+wisemapping_datasource_driver: "org.hsqldb.jdbc.JDBCDriver"
+wisemapping_datasource_username: "sa"
+wisemapping_datasource_password: ""
+wisemapping_jpa_ddl_auto: "update"

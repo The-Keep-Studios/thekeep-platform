@@ -10,3 +10,6 @@
     - role: localai_k8s
       tags: [localai]
       when: enable_localai | bool
+    - role: wisemapping_k8s
+      tags: [wisemapping]
+      when: enable_wisemapping | bool

@@ -22,7 +22,18 @@ For macOS installs, place the Resolve Studio DMG in `./files/` (default pattern:
 ```bash
 chmod +x bootstrap.sh
 ./bootstrap.sh
+```
+
+Setup full site:
+
+```bash
 ansible-playbook -K site.yml
+```
+
+Resolve only:
+
+```bash
+ansible-playbook -K site.yml --tags resolve
 ```
 
 Launch Resolve:
@@ -39,9 +50,7 @@ ansible-playbook -K -i "localhost," -c local site.yml --tags resolve
 
 Note: first launch may prompt for your Resolve Studio license activation.
 
-## LocalAI on k3s (Mint host)
-
-How to use:
+## k3s workloads (Mint host)
 
 1) Bootstrap Ansible:
 
@@ -49,24 +58,33 @@ How to use:
 ./bootstrap.sh
 ```
 
-2) Install k3s + LocalAI:
+2) Install k3s and workloads:
+
+```bash
+ansible-playbook -K site.yml --tags k3s,localai,wisemapping
+```
+
+3) Or install one workload:
 
 ```bash
 ansible-playbook -K site.yml --tags k3s,localai
+ansible-playbook -K site.yml --tags k3s,wisemapping
 ```
 
-3) Check the pod:
+4) Check resources:
 
 ```bash
-kubectl -n localai get pods
+kubectl -n localai get pods,svc
+kubectl -n wisemapping get pods,svc,pvc
 ```
 
-4) Call LocalAI:
+5) Access services:
 
-- In-cluster: `http://localai.localai.svc.cluster.local:8080`
-- NodePort (if enabled): `http://<host-ip>:30880`
+- LocalAI in-cluster: `http://localai.localai.svc.cluster.local:8080`
+- LocalAI NodePort (if enabled): `http://<host-ip>:30880`
+- Wisemapping NodePort: `http://<host-ip>:30080`
 
-Note: Vulkan support is enabled with `USE_VULKAN=true`.
+Config defaults are in `group_vars/all.yml` (`enable_k3s`, `enable_localai`, `enable_wisemapping`, service ports, storage, and image settings).
 
 ## Notes
 
