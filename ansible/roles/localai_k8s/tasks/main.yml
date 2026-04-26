@@ -1,0 +1,56 @@
+- name: Check for k3s kubeconfig
+  ansible.builtin.stat:
+    path: /etc/rancher/k3s/k3s.yaml
+  register: k3s_kubeconfig
+
+- name: Fail if k3s is not installed
+  ansible.builtin.fail:
+    msg: "k3s is not installed or kubeconfig is missing. Run the k3s role first (e.g., --tags k3s)."
+  when: not k3s_kubeconfig.stat.exists
+
+- name: Set LocalAI manifest path
+  ansible.builtin.set_fact:
+    localai_manifest_path: "{{ role_path | dirname | dirname | dirname }}/kubernetes/apps/localai/standalone.yaml"
+
+- name: Check LocalAI manifest exists
+  ansible.builtin.stat:
+    path: "{{ localai_manifest_path }}"
+  register: localai_manifest
+
+- name: Fail if LocalAI manifest is missing
+  ansible.builtin.fail:
+    msg: "LocalAI manifest not found at {{ localai_manifest_path }}."
+  when: not localai_manifest.stat.exists
+
+- name: Apply LocalAI Kubernetes manifest
+  ansible.builtin.command: /usr/local/bin/kubectl apply -f {{ localai_manifest_path }}
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+
+- name: Wait for LocalAI pod to be ready
+  ansible.builtin.command: >
+    /usr/local/bin/kubectl -n localai
+    wait --for=condition=ready pod -l app=localai --timeout=180s
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+  register: localai_wait
+  retries: 5
+  delay: 5
+  until: localai_wait.rc == 0
+  changed_when: false
+
+- name: Smoke test LocalAI service from inside the pod
+  ansible.builtin.command:
+    argv:
+      - /usr/local/bin/kubectl
+      - -n
+      - localai
+      - exec
+      - deploy/localai
+      - --
+      - sh
+      - -c
+      - "if command -v curl >/dev/null 2>&1; then curl -sf http://localai:8080/readyz || curl -sf http://localai:8080/; elif command -v wget >/dev/null 2>&1; then wget -qO- http://localai:8080/readyz || wget -qO- http://localai:8080/; else echo 'no curl or wget in container' >&2; exit 1; fi"
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+  changed_when: false

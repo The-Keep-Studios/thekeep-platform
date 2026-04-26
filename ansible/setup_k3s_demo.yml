@@ -1,0 +1,6 @@
+- name: Setup K3s Demo
+  hosts: local
+  become: true
+  roles:
+    - role: k3s_host
+      tags: [k3s]

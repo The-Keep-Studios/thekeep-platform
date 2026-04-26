@@ -1,36 +1,45 @@
-# Resolve + Ansible bootstrap (Linux Mint 22)
+# Resolve + K3s Bootstrap
 
-This repo bootstraps Ansible on a fresh Mint 22 machine, then uses Ansible to install DaVinci Resolve Studio
-via MakeResolveDeb (so you get a proper .deb install you can cleanly uninstall).
+The repository currently supports two tracks:
+- **1-hour Leantime demo** (current priority; architecture in `designdoc.md`)
+- **Original Resolve + optional K3s workloads** (legacy functionality kept working)
 
-## What you must do manually
+## 1-hour demo (recommended path)
 
-Download the official Blackmagic installer for Linux:
-
-- `DaVinci_Resolve_Studio_20.3.2_Linux.run`
-
-Place it in:
-
-- `./files/DaVinci_Resolve_Studio_20.3.2_Linux.run`
-
-Blackmagic's licensing requires you fetch this yourself; this repo doesn't redistribute it.
-
-For macOS installs, place the Resolve Studio DMG in `./files/` (default pattern: `DaVinci_Resolve_Studio*.dmg`).
-
-## Quick start
+This is the fastest path to validate Leantime UX on a single machine.
 
 ```bash
-chmod +x bootstrap.sh
 ./bootstrap.sh
 ```
 
-Setup full site:
+Then open:
+
+- `https://localhost`
+- `http://localhost:30082` (Mailpit inbox for demo emails)
+
+When done:
 
 ```bash
-ansible-playbook -K site.yml
+./teardown-cluster.sh
 ```
 
-Resolve only:
+What this path does:
+- Creates isolated `k3s-admin` management user/group
+- Installs single-node K3s
+- Generates self-signed TLS cert for `localhost`
+- Deploys Leantime + in-cluster MariaDB + ingress
+- Deploys Mailpit so invite/reset emails work in the demo
+
+## Original Ansible functionality (still supported)
+
+### Resolve Studio install
+
+Download Blackmagic installer manually (license requirement):
+
+- Linux: `DaVinci_Resolve_Studio_20.3.2_Linux.run` -> `./files/`
+- macOS: `DaVinci_Resolve_Studio*.dmg` -> `./files/`
+
+Install Resolve role:
 
 ```bash
 ansible-playbook -K site.yml --tags resolve
@@ -42,51 +51,45 @@ Launch Resolve:
 resolve
 ```
 
-macOS (local run):
-
-```bash
-ansible-playbook -K -i "localhost," -c local site.yml --tags resolve
-```
-
-Note: first launch may prompt for your Resolve Studio license activation.
-
-## k3s workloads (Mint host)
-
-1) Bootstrap Ansible:
-
-```bash
-./bootstrap.sh
-```
-
-2) Install k3s and workloads:
+### K3s + workload roles
 
 ```bash
 ansible-playbook -K site.yml --tags k3s,localai,wisemapping
 ```
 
-3) Or install one workload:
+Or individually:
 
 ```bash
 ansible-playbook -K site.yml --tags k3s,localai
 ansible-playbook -K site.yml --tags k3s,wisemapping
 ```
 
-4) Check resources:
+Service defaults:
+- Leantime demo NodePort: `30080` (plus ingress `https://localhost`)
+- Mailpit inbox NodePort: `30082`
+- Wisemapping NodePort: `30081`
+- LocalAI service: `ClusterIP` on `8080` by default
 
-```bash
-kubectl -n localai get pods,svc
-kubectl -n wisemapping get pods,svc,pvc
-```
-
-5) Access services:
-
-- LocalAI in-cluster: `http://localai.localai.svc.cluster.local:8080`
-- LocalAI NodePort (if enabled): `http://<host-ip>:30880`
-- Wisemapping NodePort: `http://<host-ip>:30080`
-
-Config defaults are in `group_vars/all.yml` (`enable_k3s`, `enable_localai`, `enable_wisemapping`, service ports, storage, and image settings).
+Configuration is manifest-first. Edit:
+- `kubernetes/apps/leantime/demo-standalone.yaml`
+- `kubernetes/apps/localai/standalone.yaml`
+- `kubernetes/apps/wisemapping/standalone.yaml`
 
 ## Notes
 
-- If you are on Wayland, Resolve may crash. Prefer an Xorg session ("Linux Mint on Xorg").
-- Mint 22 / Ubuntu 24.04 often needs libssl1.1; this playbook installs it from Ubuntu's pool.
+- If you use Wayland, Resolve is often less stable than Xorg.
+- Mint 22 / Ubuntu 24.04 may require `libssl1.1`; the role installs it from Ubuntu pool packages.
+
+## Troubleshooting (Leantime onboarding)
+
+If setup redirects to login before you set a password:
+
+1. Open Mailpit at `http://localhost:30082` and use the invite/reset email link.
+2. If needed, print the current invite link directly from DB:
+
+```bash
+sudo -u k3s-admin -H env KUBECONFIG=/home/k3s-admin/.kube/config \
+  kubectl exec deploy/leantime-mariadb -- \
+  mariadb -uleantime -pleantime-pass leantime -Nse \
+  "SELECT CONCAT('https://localhost/auth/userInvite/', pwReset) FROM zp_user WHERE id=1;"
+```

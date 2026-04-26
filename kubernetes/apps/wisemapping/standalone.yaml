@@ -1,0 +1,105 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: wisemapping
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: wisemapping-config
+  namespace: wisemapping
+data:
+  application.yml: |-
+    spring:
+      datasource:
+        url: "jdbc:hsqldb:file:/var/lib/wisemapping/db/wisemapping;sql.names=false;sql.regular_names=false;shutdown=true"
+        driver-class-name: "org.hsqldb.jdbc.JDBCDriver"
+        username: "sa"
+        password: ""
+      jpa:
+        hibernate:
+          ddl-auto: "update"
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: wisemapping-db
+  namespace: wisemapping
+spec:
+  accessModes:
+  - ReadWriteOnce
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: "5Gi"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: wisemapping
+  namespace: wisemapping
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: wisemapping
+  template:
+    metadata:
+      labels:
+        app: wisemapping
+    spec:
+      containers:
+      - name: wisemapping
+        image: wisemapping/wisemapping:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - name: http
+          containerPort: 80
+        readinessProbe:
+          httpGet:
+            path: /
+            port: http
+          initialDelaySeconds: 15
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 12
+        livenessProbe:
+          httpGet:
+            path: /
+            port: http
+          initialDelaySeconds: 30
+          periodSeconds: 20
+          timeoutSeconds: 5
+          failureThreshold: 6
+        volumeMounts:
+        - name: db
+          mountPath: /var/lib/wisemapping
+        - name: app-config
+          mountPath: /app/config/application.yml
+          subPath: application.yml
+          readOnly: true
+      volumes:
+      - name: db
+        persistentVolumeClaim:
+          claimName: wisemapping-db
+      - name: app-config
+        configMap:
+          name: wisemapping-config
+          items:
+          - key: application.yml
+            path: application.yml
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: wisemapping
+  namespace: wisemapping
+spec:
+  type: NodePort
+  selector:
+    app: wisemapping
+  ports:
+  - name: http
+    port: 80
+    targetPort: http
+    nodePort: 30081

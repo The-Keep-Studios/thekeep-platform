@@ -34,6 +34,7 @@ The physical layer is heterogeneous, residing entirely on local networks before 
 We utilize **Ansible** strictly for the "Hardware to Kubernetes" layer. Once K3s is alive, Ansible's job is largely done, and GitOps takes over.
 
 * **Orchestration:** **K3s** (Lightweight Kubernetes).
+* **Isolation & Security:** A dedicated system user `k3s-admin` and group `k3s` are created to manage the cluster. The `kubeconfig` is owned by this user, and `kubectl` commands are executed via `sudo -u k3s-admin` to ensure management isolation from the primary user account.
 * **Container Runtime:** containerd (with `nvidia-container-toolkit` installed on the Framework Desktop via Ansible for GPU passthrough).
 * **Storage (CSI):** **Longhorn**. Deployed immediately after K3s. It provides distributed, highly available block storage for databases and persistent volumes. Replicas should be configured based on the final node count.
 
@@ -125,9 +126,9 @@ infrastructure-as-code/
 
 * **To the Senior Engineers:** Resist the urge to rewrite the PHP backend of Leantime. Containerize it, put it behind the Nginx proxy, and treat it as a black box. Your time is better spent building custom AI agents in Python/TS that interface with Leantime's API.
 * **To the AI Agents:** When generating the Ansible roles, ensure idempotency. When generating K8s manifests, utilize `values.yaml` paradigms for Helm charts to allow easy overriding of local vs. production environment variables. Always request PersistentVolumeClaims (PVCs) mapping to the `longhorn` storage class.
+* **Manifest-First Rule:** Workload source of truth lives under `kubernetes/apps/*/*.yaml`. Ansible roles should apply these files directly; avoid role-local Jinja manifest templates to reduce drift and improve editor tooling.
 * **Security Posture:** Do not commit secrets. Use Kubernetes Secrets or external secret management (e.g., SOPS with Age, or HashiCorp Vault if scaled later) within the GitLab CI/CD pipelines.
 * **Future Scope (Cloud Bursting):** GCP/Terraform is explicitly out of scope for the local cluster provisioning. If public landing pages migrate to GCP, Terraform will be executed by GitLab Runners targeting GCP APIs, completely segregated from this Ansible local-hardware logic.
-  Here is the extension to the Design Specification, formatted as an addendum to append directly to the end of your `ARCHITECTURE.md` file.
 
 ---
 
@@ -141,30 +142,32 @@ To ensure this deployment can be provisioned, tested, and destroyed within a **6
 
 * **Hardware Reduction:** The Framework Desktop and Raspberry Pi are completely excluded. The demo will execute entirely on the **Linux Mint Laptop**.
 * **Storage Simplification:** Longhorn CSI is out of scope. The demo will utilize the default K3s `local-path` provisioner. Data will not survive a node teardown.
-* **Database Simplification:** MariaDB/PostgreSQL pods are out of scope. Leantime will be deployed using its embedded **SQLite** configuration.
+* **Database Simplification:** External HA database architecture is out of scope. For demo reliability, Leantime runs with a single in-cluster **MariaDB** pod + PVC.
 * **Networking & Edge:** MetalLB, Cert-Manager, and custom AdGuard DNS routing are excluded. Access will be via K3s's built-in Klipper LoadBalancer and localhost/IP port binding.
 * **Infrastructure & Observability:** GitLab (Meta-CI/CD), Grafana, Prometheus, and GPU passthrough configurations are entirely omitted. Workloads will be applied directly via local `kubectl` commands.
+* **Email Handling (Demo):** A local SMTP sink (Mailpit) is included so invite/reset flows are testable without external mail infrastructure.
 
 ### C. Demo Architecture Spec
 
 **1. Target Node:**
 * `test-laptop` (Linux Mint).
 * Ansible connection: `local` (bypassing network SSH complexities for the demo).
+* **Management User:** `k3s-admin` (Isolated system account).
 
 **2. Kubernetes (K3s) Configuration:**
 * Single "Server" node deployment.
-* Default Traefik Ingress allowed (no custom Nginx swap needed for the demo).
+* Default Traefik Ingress enabled.
+* **HTTPS Support:** Self-signed certificates generated for `localhost` and managed via K8s TLS secrets.
 
 **3. Leantime Workload Manifest:**
-* Single Pod Deployment (`leantime/leantime:latest`).
-* Environment Variable injected: `LEAN_DB_TYPE=sqlite`.
-* Exposed via standard K8s `Service` of `type: LoadBalancer` mapping to port `80`.
+* Single Leantime Deployment (`leantime/leantime:latest`) plus a single MariaDB Deployment.
+* Environment variables inject MySQL connectivity (`LEAN_DB_DEFAULT_CONNECTION=mysql`, host/user/password/database).
+* Exposed via `Service` and `Ingress` for HTTPS routing on port 443.
 
 ### D. Execution & Teardown Protocol
 
 **For AI Agents & Engineers:** The execution must strictly follow this isolated path to ensure the host operating system remains unpolluted.
 
-1.  **Bootstrap:** Execute `ansible-playbook ansible/setup_k3s_demo.yml`.
-2.  **Deploy:** Execute `kubectl apply -f kubernetes/apps/leantime/demo-standalone.yaml`.
-3.  **Evaluate:** Stakeholders access the local IP on port 80, initialize Leantime, enable Scrum modules, and test the Backlog-to-Sprint drag-and-drop UX.
-4.  **Teardown (Crucial Step):** Once the evaluation is complete, execute the K3s native purge script provided by the installation: `/usr/local/bin/k3s-uninstall.sh`. This ensures all networking tables, containers, and local-path volumes are cleanly wiped from the Linux Mint laptop.
+1.  **Bootstrap:** Execute `scripts/bootstrap.sh`. This script handles host prep, k3s-admin user creation, certificate generation, and Leantime deployment.
+2.  **Evaluate:** Stakeholders access `https://localhost`, initialize Leantime, enable Scrum modules, and test the Backlog-to-Sprint drag-and-drop UX.
+3.  **Teardown (Crucial Step):** Once the evaluation is complete, execute `scripts/teardown-cluster.sh`. This ensures all networking tables, containers, and the `k3s-admin` user are cleanly wiped from the Linux Mint laptop.

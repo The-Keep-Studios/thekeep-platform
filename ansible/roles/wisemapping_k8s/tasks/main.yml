@@ -8,28 +8,28 @@
     msg: "k3s is not installed or kubeconfig is missing. Run the k3s role first (e.g., --tags k3s)."
   when: not k3s_kubeconfig.stat.exists
 
-- name: Ensure Wisemapping manifest directory exists
-  ansible.builtin.file:
-    path: "{{ wisemapping_manifest_dir }}"
-    state: directory
-    owner: root
-    group: root
-    mode: "0755"
+- name: Set Wisemapping manifest path
+  ansible.builtin.set_fact:
+    wisemapping_manifest_path: "{{ role_path | dirname | dirname | dirname }}/kubernetes/apps/wisemapping/standalone.yaml"
 
-- name: Render Wisemapping Kubernetes manifest
-  ansible.builtin.template:
-    src: wisemapping.yaml.j2
-    dest: "{{ wisemapping_manifest_dir }}/wisemapping.yaml"
-    mode: "0644"
+- name: Check Wisemapping manifest exists
+  ansible.builtin.stat:
+    path: "{{ wisemapping_manifest_path }}"
+  register: wisemapping_manifest
+
+- name: Fail if Wisemapping manifest is missing
+  ansible.builtin.fail:
+    msg: "Wisemapping manifest not found at {{ wisemapping_manifest_path }}."
+  when: not wisemapping_manifest.stat.exists
 
 - name: Apply Wisemapping Kubernetes manifest
-  ansible.builtin.command: /usr/local/bin/kubectl apply -f {{ wisemapping_manifest_dir }}/wisemapping.yaml
+  ansible.builtin.command: /usr/local/bin/kubectl apply -f {{ wisemapping_manifest_path }}
   environment:
     KUBECONFIG: /etc/rancher/k3s/k3s.yaml
 
 - name: Wait for Wisemapping pod to be ready
   ansible.builtin.command: >
-    /usr/local/bin/kubectl -n {{ wisemapping_namespace }}
+    /usr/local/bin/kubectl -n wisemapping
     wait --for=condition=ready pod -l app=wisemapping --timeout=180s
   environment:
     KUBECONFIG: /etc/rancher/k3s/k3s.yaml

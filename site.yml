@@ -1,15 +1,2 @@
-- name: Setup workstation
-  hosts: local
-  become: true
-  roles:
-    - role: resolve
-      tags: [resolve]
-    - role: k3s_host
-      tags: [k3s]
-      when: enable_k3s | bool
-    - role: localai_k8s
-      tags: [localai]
-      when: enable_localai | bool
-    - role: wisemapping_k8s
-      tags: [wisemapping]
-      when: enable_wisemapping | bool
+---
+- import_playbook: ansible/site.yml
