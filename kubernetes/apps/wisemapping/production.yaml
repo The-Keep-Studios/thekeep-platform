@@ -84,7 +84,7 @@ spec:
     spec:
       containers:
       - name: postgres
-        image: postgres:16-alpine
+        image: postgres:16.13-alpine
         imagePullPolicy: IfNotPresent
         ports:
         - name: postgres
@@ -116,6 +116,13 @@ spec:
         volumeMounts:
         - name: data
           mountPath: /var/lib/postgresql/data
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "256Mi"
+          limits:
+            cpu: "1000m"
+            memory: "1Gi"
       volumes:
       - name: data
         persistentVolumeClaim:
@@ -152,7 +159,7 @@ spec:
     spec:
       containers:
       - name: wisemapping
-        image: wisemapping/wisemapping:latest
+        image: wisemapping/wisemapping:6.0.7
         imagePullPolicy: IfNotPresent
         envFrom:
         - secretRef:
@@ -181,6 +188,13 @@ spec:
           mountPath: /app/config/application.yml
           subPath: application.yml
           readOnly: true
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "512Mi"
+          limits:
+            cpu: "1000m"
+            memory: "2Gi"
       volumes:
       - name: app-config
         configMap:

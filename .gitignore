@@ -2,3 +2,6 @@
 /files/DaVinci_Resolve_Studio_20.3.2_Mac.dmg
 /.certs/*
 /scripts/production.env
+/backups/
+ansible/production_vars.yml
+.output.txt

@@ -57,8 +57,8 @@ if [ -z "$CLOUDFLARE_TUNNEL_TOKEN" ]; then
     echo "  ./scripts/bootstrap.sh"
     echo "----------------------------------------------------"
 else
-    if [ ! -f kubernetes/platform/cloudflare-tunnel.yaml ]; then
-        echo "Missing manifest: kubernetes/platform/cloudflare-tunnel.yaml"
+    if [ ! -f kubernetes/platform/cloudflared/kustomization.yaml ]; then
+        echo "Missing kustomization: kubernetes/platform/cloudflared/kustomization.yaml"
         exit 1
     fi
 
@@ -69,7 +69,7 @@ else
         --dry-run=client -o yaml | kadmin apply -f -
 
     echo "Deploying Cloudflare Tunnel..."
-    kadmin apply -f kubernetes/platform/cloudflare-tunnel.yaml
+    kadmin apply -k kubernetes/platform/cloudflared
 
     echo "Waiting for Cloudflare Tunnel to be ready..."
     kadmin wait --for=condition=available --timeout=300s deployment/cloudflared -n kube-system
@@ -110,6 +110,6 @@ if [ -n "$CLOUDFLARE_TUNNEL_TOKEN" ]; then
     echo ""
     echo "Cloudflare tunnel is deployed."
     echo "This demo bootstrap does not configure platform SSO."
-    echo "For Authentik-based production SSO, use: ./bootstrap-production.sh"
+    echo "For Authentik-based production SSO, use the GitOps path in README.md."
 fi
 echo "===================================================="

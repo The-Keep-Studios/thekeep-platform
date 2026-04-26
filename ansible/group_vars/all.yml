@@ -29,6 +29,29 @@ resolve_extras_ca_symlink: true
 enable_k3s: true
 enable_localai: true
 enable_wisemapping: true
+k3s_version: "v1.35.3+k3s1"
+
+# GitOps Configuration
+gitops_repo_url: "iantsmall@192.168.0.46:~/git/resolve-ansible-boilerplate.git"
+gitops_revision: "feature/productionReadyK8s"
+gitops_repo_private: false
+# If gitops_repo_private is true, provide credentials in ansible/production_vars.yml:
+#   gitops_repo_ssh_private_key: "...", or
+#   gitops_repo_ssh_private_key_path: "/path/to/key", or
+#   gitops_repo_username/gitops_repo_password.
+
+# Load platform_secrets from production_vars.yml or Ansible Vault
+# platform_secrets: (Moved to production_vars.yml.example)
+
+platform_oidc:
+  leantime:
+    enable: false
+  wisemapping:
+    enable: false
+
+monitoring_enabled: true
+require_external_https: true
+direct_http_urls: []
 
 # Workload config is now manifest-first:
 #   kubernetes/apps/localai/standalone.yaml

@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
       - name: cloudflared
-        image: cloudflare/cloudflared:latest
+        image: cloudflare/cloudflared:2026.3.0
         imagePullPolicy: IfNotPresent
         command:
         - cloudflared
@@ -56,3 +56,10 @@ spec:
           periodSeconds: 20
           timeoutSeconds: 5
           failureThreshold: 1
+        resources:
+          requests:
+            cpu: "50m"
+            memory: "128Mi"
+          limits:
+            cpu: "500m"
+            memory: "512Mi"

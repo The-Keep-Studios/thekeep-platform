@@ -20,7 +20,7 @@ spec:
     spec:
       containers:
       - name: localai
-        image: localai/localai:latest
+        image: localai/localai:sha-ad3c8c4
         imagePullPolicy: IfNotPresent
         ports:
         - name: http

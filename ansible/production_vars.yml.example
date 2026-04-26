@@ -1,0 +1,24 @@
+# Production Secrets (REPLACE THESE IN PRODUCTION)
+# Copy this file to production_vars.yml and fill in the values.
+# production_vars.yml is ignored by git.
+
+platform_secrets:
+  authentik_secret_key: "CHANGE_ME"
+  authentik_postgres_password: "CHANGE_ME"
+  authentik_bootstrap_email: "admin@thekeepstudios.com"
+  authentik_bootstrap_password: "CHANGE_ME"
+  leantime_db_root_password: "CHANGE_ME"
+  leantime_db_password: "CHANGE_ME"
+  wisemapping_postgres_password: "CHANGE_ME"
+  wisemapping_jwt_secret: "CHANGE_ME"
+  wisemapping_oauth_token_secret: "CHANGE_ME"
+  cloudflare_tunnel_token: "CHANGE_ME"
+  grafana_admin_user: "admin"
+  grafana_admin_password: "CHANGE_ME"
+
+# Optional: enable these only when gitops_repo_private is true.
+# gitops_repo_ssh_private_key_path: "/path/to/argocd-readonly-key"
+# gitops_repo_ssh_private_key: |
+#   CHANGE_ME
+# gitops_repo_username: "CHANGE_ME"
+# gitops_repo_password: "CHANGE_ME"

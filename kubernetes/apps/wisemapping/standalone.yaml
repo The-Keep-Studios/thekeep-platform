@@ -50,7 +50,7 @@ spec:
     spec:
       containers:
       - name: wisemapping
-        image: wisemapping/wisemapping:latest
+        image: wisemapping/wisemapping:6.0.7
         imagePullPolicy: IfNotPresent
         ports:
         - name: http

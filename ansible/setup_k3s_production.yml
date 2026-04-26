@@ -1,0 +1,146 @@
+- name: Setup K3s Production Host(s)
+  hosts: k3s_control_plane
+  become: true
+  pre_tasks:
+    - name: Ensure production_vars.yml exists
+      ansible.builtin.stat:
+        path: "{{ playbook_dir }}/production_vars.yml"
+      register: prod_vars_stat
+      delegate_to: localhost
+      become: false
+      tags: [always]
+
+    - name: Fail if production_vars.yml is missing
+      ansible.builtin.fail:
+        msg: "production_vars.yml is missing! Copy production_vars.yml.example and fill it in."
+      when: not prod_vars_stat.stat.exists
+      delegate_to: localhost
+      become: false
+      tags: [always]
+
+    - name: Load production variables after preflight
+      ansible.builtin.include_vars:
+        file: "{{ playbook_dir }}/production_vars.yml"
+      tags: [always]
+
+    - name: Define required production secret keys
+      ansible.builtin.set_fact:
+        required_platform_secret_keys:
+          - authentik_secret_key
+          - authentik_postgres_password
+          - authentik_bootstrap_email
+          - authentik_bootstrap_password
+          - leantime_db_root_password
+          - leantime_db_password
+          - wisemapping_postgres_password
+          - wisemapping_jwt_secret
+          - wisemapping_oauth_token_secret
+          - cloudflare_tunnel_token
+          - grafana_admin_user
+          - grafana_admin_password
+        production_placeholder_values:
+          - change_me
+          - changeme
+          - replace_me
+          - replaceme
+          - todo
+          - example
+          - example_value
+          - your_value_here
+          - your_secret_here
+      tags: [always]
+
+    - name: Fail if platform_secrets is missing
+      ansible.builtin.fail:
+        msg: "platform_secrets is missing from production_vars.yml."
+      when: platform_secrets is not defined
+      tags: [always]
+
+    - name: Fail if platform_secrets is not a mapping
+      ansible.builtin.fail:
+        msg: "platform_secrets must be a YAML mapping in production_vars.yml."
+      when:
+        - platform_secrets is defined
+        - platform_secrets | type_debug != "dict"
+      tags: [always]
+
+    - name: Detect missing required production secrets
+      ansible.builtin.set_fact:
+        missing_platform_secret_keys: "{{ required_platform_secret_keys | difference(platform_secrets.keys() | list) }}"
+      tags: [always]
+
+    - name: Fail if required production secrets are missing
+      ansible.builtin.fail:
+        msg: "production_vars.yml is missing required platform_secrets keys: {{ missing_platform_secret_keys | join(', ') }}"
+      when: missing_platform_secret_keys | length > 0
+      tags: [always]
+
+    - name: Fail if required production secrets are empty or placeholders
+      ansible.builtin.fail:
+        msg: "The production secret {{ item }} is empty or still set to a placeholder value."
+      vars:
+        secret_value: "{{ platform_secrets[item] | default('') | string }}"
+        normalized_secret_value: "{{ secret_value | trim | lower }}"
+      loop: "{{ required_platform_secret_keys }}"
+      when: >
+        (secret_value | trim | length == 0) or
+        (normalized_secret_value in production_placeholder_values) or
+        (normalized_secret_value is match('^(change[_-]?me|replace[_-]?me|todo|example|your[_ -]?value|your[_ -]?secret)'))
+      delegate_to: localhost
+      become: false
+      tags: [always]
+
+    - name: Fail if direct origin URLs are missing while external HTTPS is required
+      ansible.builtin.fail:
+        msg: "direct_http_urls must be configured when require_external_https is true."
+      when:
+        - require_external_https | default(true) | bool
+        - direct_http_urls | default([]) | length == 0
+      tags: [always]
+
+    - name: Check GitOps SSH private key path
+      ansible.builtin.stat:
+        path: "{{ gitops_repo_ssh_private_key_path }}"
+      register: gitops_repo_ssh_key_path_stat
+      when:
+        - gitops_repo_private | default(false) | bool
+        - gitops_repo_ssh_private_key_path | default('') | string | trim | length > 0
+      delegate_to: localhost
+      become: false
+      tags: [always]
+
+    - name: Fail if configured GitOps SSH private key path is missing
+      ansible.builtin.fail:
+        msg: "gitops_repo_ssh_private_key_path is configured but does not exist: {{ gitops_repo_ssh_private_key_path }}"
+      when:
+        - gitops_repo_private | default(false) | bool
+        - gitops_repo_ssh_private_key_path | default('') | string | trim | length > 0
+        - not gitops_repo_ssh_key_path_stat.stat.exists
+      delegate_to: localhost
+      become: false
+      tags: [always]
+
+    - name: Fail if private GitOps repository credentials are missing
+      ansible.builtin.fail:
+        msg: "gitops_repo_private is true, but no Argo CD repository credentials were provided."
+      when:
+        - gitops_repo_private | default(false) | bool
+        - not (
+            (gitops_repo_ssh_private_key | default('') | string | trim | length > 0) or
+            (gitops_repo_ssh_private_key_path | default('') | string | trim | length > 0) or
+            (
+              (gitops_repo_username | default('') | string | trim | length > 0) and
+              (gitops_repo_password | default('') | string | trim | length > 0)
+            )
+          )
+      delegate_to: localhost
+      become: false
+      tags: [always]
+
+  roles:
+    - role: k3s_host
+      tags: [k3s]
+    - role: platform_gitops
+      tags: [platform, gitops]
+    - role: platform_validation
+      tags: [platform, validation]

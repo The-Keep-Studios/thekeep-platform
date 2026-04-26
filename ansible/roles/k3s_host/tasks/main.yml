@@ -11,9 +11,11 @@
     system: true
     create_home: true
 
-- name: Ensure curl is installed
+- name: Ensure curl and python3-kubernetes are installed
   ansible.builtin.apt:
-    name: curl
+    name:
+      - curl
+      - python3-kubernetes
     state: present
     update_cache: true
 
@@ -24,7 +26,7 @@
 
 - name: Download k3s install script
   ansible.builtin.get_url:
-    url: https://get.k3s.io
+    url: "https://raw.githubusercontent.com/k3s-io/k3s/{{ k3s_version }}/install.sh"
     dest: /tmp/k3s-install.sh
     mode: "0755"
   when: not k3s_bin.stat.exists
@@ -32,6 +34,7 @@
 - name: Install k3s with isolated permissions
   ansible.builtin.command: sh /tmp/k3s-install.sh
   environment:
+    INSTALL_K3S_VERSION: "{{ k3s_version }}"
     K3S_KUBECONFIG_MODE: "640"
     K3S_KUBECONFIG_GROUP: "k3s"
   args:

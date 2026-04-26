@@ -34,17 +34,23 @@ spec:
     spec:
       containers:
       - name: mariadb
-        image: mariadb:11
+        image: mariadb:11.8.6-ubi9
         imagePullPolicy: IfNotPresent
         env:
         - name: MYSQL_ROOT_PASSWORD
-          value: "root-password-change-me"
+          valueFrom:
+            secretKeyRef:
+              name: leantime-db
+              key: MYSQL_ROOT_PASSWORD
         - name: MYSQL_DATABASE
           value: "leantime"
         - name: MYSQL_USER
           value: "leantime_user"
         - name: MYSQL_PASSWORD
-          value: "leantime-password-change-me"
+          valueFrom:
+            secretKeyRef:
+              name: leantime-db
+              key: MYSQL_PASSWORD
         ports:
         - name: mysql
           containerPort: 3306
@@ -71,6 +77,13 @@ spec:
         volumeMounts:
         - name: db-data
           mountPath: /var/lib/mysql
+        resources:
+          requests:
+            cpu: "250m"
+            memory: "512Mi"
+          limits:
+            cpu: "1000m"
+            memory: "2Gi"
       volumes:
       - name: db-data
         persistentVolumeClaim:
@@ -116,19 +129,27 @@ spec:
     spec:
       initContainers:
       - name: wait-for-mariadb
-        image: mariadb:11
+        image: mariadb:11.8.6-ubi9
         imagePullPolicy: IfNotPresent
+        env:
+        - name: MYSQL_USER
+          value: "leantime_user"
+        - name: MYSQL_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: leantime-db
+              key: MYSQL_PASSWORD
         command:
         - sh
         - -c
         - |
-          until mariadb-admin ping -h leantime-mariadb -uleantime_user -pleantime-password-change-me --silent; do
+          until mariadb-admin ping -h leantime-mariadb -u"${MYSQL_USER}" -p"${MYSQL_PASSWORD}" --silent; do
             echo "waiting for leantime-mariadb to become ready"
             sleep 2
           done
       containers:
       - name: leantime
-        image: leantime/leantime:latest
+        image: leantime/leantime:3.7.3
         imagePullPolicy: IfNotPresent
         envFrom:
         - configMapRef:
@@ -149,7 +170,10 @@ spec:
         - name: LEAN_DB_USER
           value: "leantime_user"
         - name: LEAN_DB_PASSWORD
-          value: "leantime-password-change-me"
+          valueFrom:
+            secretKeyRef:
+              name: leantime-db
+              key: MYSQL_PASSWORD
         - name: LEAN_DB_DATABASE
           value: "leantime"
         readinessProbe:
@@ -171,6 +195,13 @@ spec:
         volumeMounts:
         - name: leantime-vol
           mountPath: /var/www/html/user/data
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "256Mi"
+          limits:
+            cpu: "1000m"
+            memory: "1Gi"
       volumes:
       - name: leantime-vol
         persistentVolumeClaim:

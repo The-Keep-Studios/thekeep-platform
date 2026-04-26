@@ -45,7 +45,7 @@ spec:
     spec:
       containers:
       - name: mariadb
-        image: mariadb:11
+        image: mariadb:11.8.6-ubi9
         imagePullPolicy: IfNotPresent
         ports:
         - name: mysql
@@ -116,7 +116,7 @@ spec:
     spec:
       containers:
       - name: mailpit
-        image: axllent/mailpit:latest
+        image: axllent/mailpit:v1.29.6
         imagePullPolicy: IfNotPresent
         ports:
         - name: smtp
@@ -185,7 +185,7 @@ spec:
     spec:
       initContainers:
       - name: wait-for-mariadb
-        image: mariadb:11
+        image: mariadb:11.8.6-ubi9
         imagePullPolicy: IfNotPresent
         command:
         - sh
@@ -197,7 +197,7 @@ spec:
           done
       containers:
       - name: leantime
-        image: leantime/leantime:latest
+        image: leantime/leantime:3.7.3
         imagePullPolicy: IfNotPresent
         envFrom:
         - configMapRef:

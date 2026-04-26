@@ -49,6 +49,20 @@ prometheus:
             requests:
               storage: 25Gi
 
+additionalPrometheusRulesMap:
+  backup-rules:
+    groups:
+      - name: backup.rules
+        rules:
+          - alert: LeantimeBackupFailed
+            expr: kube_job_status_failed{job_name=~"leantime-db-backup-.*"} > 0
+            for: 0m
+            labels:
+              severity: critical
+            annotations:
+              summary: "Leantime database backup failed"
+              description: "The Leantime database backup job {{ $labels.job_name }} has failed."
+
 alertmanager:
   ingress:
     enabled: true

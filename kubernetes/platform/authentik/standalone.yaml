@@ -44,7 +44,7 @@ spec:
     spec:
       containers:
       - name: postgres
-        image: postgres:16-alpine
+        image: postgres:16.13-alpine
         imagePullPolicy: IfNotPresent
         ports:
         - name: postgres
@@ -76,6 +76,13 @@ spec:
         volumeMounts:
         - name: data
           mountPath: /var/lib/postgresql/data
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "256Mi"
+          limits:
+            cpu: "1000m"
+            memory: "1Gi"
       volumes:
       - name: data
         persistentVolumeClaim:
@@ -112,7 +119,7 @@ spec:
     spec:
       containers:
       - name: redis
-        image: redis:7-alpine
+        image: redis:7.4.8-alpine
         imagePullPolicy: IfNotPresent
         args:
         - --save
@@ -135,6 +142,13 @@ spec:
           periodSeconds: 20
           timeoutSeconds: 5
           failureThreshold: 6
+        resources:
+          requests:
+            cpu: "50m"
+            memory: "128Mi"
+          limits:
+            cpu: "500m"
+            memory: "512Mi"
 ---
 apiVersion: v1
 kind: Service
@@ -167,7 +181,7 @@ spec:
     spec:
       containers:
       - name: authentik
-        image: ghcr.io/goauthentik/server:2026.2
+        image: ghcr.io/goauthentik/server:2026.2.2
         imagePullPolicy: IfNotPresent
         args:
         - server
@@ -228,6 +242,13 @@ spec:
         volumeMounts:
         - name: media
           mountPath: /media
+        resources:
+          requests:
+            cpu: "250m"
+            memory: "512Mi"
+          limits:
+            cpu: "1000m"
+            memory: "2Gi"
       volumes:
       - name: media
         persistentVolumeClaim:
@@ -250,7 +271,7 @@ spec:
     spec:
       containers:
       - name: authentik
-        image: ghcr.io/goauthentik/server:2026.2
+        image: ghcr.io/goauthentik/server:2026.2.2
         imagePullPolicy: IfNotPresent
         args:
         - worker
@@ -294,6 +315,13 @@ spec:
         volumeMounts:
         - name: media
           mountPath: /media
+        resources:
+          requests:
+            cpu: "250m"
+            memory: "512Mi"
+          limits:
+            cpu: "1000m"
+            memory: "2Gi"
       volumes:
       - name: media
         persistentVolumeClaim:

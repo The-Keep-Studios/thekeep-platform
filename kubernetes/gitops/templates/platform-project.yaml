@@ -1,0 +1,43 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: platform
+  namespace: argocd
+spec:
+  description: Platform workloads for The Keep Studios
+  sourceRepos:
+  - "{{ gitops_repo_url }}"
+  - https://prometheus-community.github.io/helm-charts
+  - https://grafana.github.io/helm-charts
+  destinations:
+  - namespace: argocd
+    server: https://kubernetes.default.svc
+  - namespace: identity
+    server: https://kubernetes.default.svc
+  - namespace: default
+    server: https://kubernetes.default.svc
+  - namespace: gitlab
+    server: https://kubernetes.default.svc
+  - namespace: wisemapping
+    server: https://kubernetes.default.svc
+  - namespace: monitoring
+    server: https://kubernetes.default.svc
+  - namespace: kube-system
+    server: https://kubernetes.default.svc
+  clusterResourceWhitelist:
+  - group: ""
+    kind: Namespace
+  - group: apiextensions.k8s.io
+    kind: CustomResourceDefinition
+  - group: rbac.authorization.k8s.io
+    kind: ClusterRole
+  - group: rbac.authorization.k8s.io
+    kind: ClusterRoleBinding
+  - group: admissionregistration.k8s.io
+    kind: MutatingWebhookConfiguration
+  - group: admissionregistration.k8s.io
+    kind: ValidatingWebhookConfiguration
+  - group: apiregistration.k8s.io
+    kind: APIService
+  orphanedResources:
+    warn: true

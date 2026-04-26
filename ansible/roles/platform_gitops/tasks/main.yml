@@ -1,0 +1,419 @@
+- name: Create local temporary GitOps render directory
+  ansible.builtin.tempfile:
+    state: directory
+    suffix: gitops-render
+  register: gitops_render_dir
+  delegate_to: localhost
+  become: false
+
+- name: Create local temporary GitOps render subdirectories
+  ansible.builtin.file:
+    path: "{{ gitops_render_dir.path }}/{{ item }}"
+    state: directory
+    mode: "0755"
+  loop:
+    - root
+    - apps
+  delegate_to: localhost
+  become: false
+
+- name: Render GitOps manifests to temporary directory
+  ansible.builtin.template:
+    src: "{{ item.src }}"
+    dest: "{{ gitops_render_dir.path }}/{{ item.dest }}"
+    mode: "0644"
+  loop:
+    - src: "{{ playbook_dir }}/../kubernetes/gitops/templates/platform-project.yaml"
+      dest: root/platform-project.yaml
+    - src: "{{ playbook_dir }}/../kubernetes/gitops/templates/platform-root.application.yaml"
+      dest: root/platform-root.application.yaml
+    - src: "{{ playbook_dir }}/../kubernetes/gitops/templates/platform-applications.yaml"
+      dest: apps/platform-applications.yaml
+  delegate_to: localhost
+  become: false
+
+- name: Verify no placeholders remain in rendered or committed GitOps manifests
+  ansible.builtin.command:
+    argv:
+      - grep
+      - -R
+      - REPLACE_ME_GITOPS_
+      - "{{ gitops_render_dir.path }}/root"
+      - "{{ gitops_render_dir.path }}/apps"
+      - "{{ playbook_dir }}/../kubernetes/gitops/root"
+      - "{{ playbook_dir }}/../kubernetes/gitops/apps"
+  register: gitops_placeholder_check
+  failed_when: gitops_placeholder_check.rc == 0 or gitops_placeholder_check.rc > 1
+  changed_when: false
+  delegate_to: localhost
+  become: false
+
+- name: Verify committed GitOps manifests match rendered templates
+  ansible.builtin.command:
+    argv:
+      - diff
+      - -ruN
+      - "{{ playbook_dir }}/../{{ item.committed }}"
+      - "{{ gitops_render_dir.path }}/{{ item.rendered }}"
+  loop:
+    - committed: kubernetes/gitops/root
+      rendered: root
+    - committed: kubernetes/gitops/apps
+      rendered: apps
+  register: gitops_render_diff
+  failed_when: gitops_render_diff.rc != 0
+  changed_when: false
+  delegate_to: localhost
+  become: false
+
+- name: Check GitOps manifests have no unstaged changes
+  ansible.builtin.command:
+    argv:
+      - git
+      - diff
+      - --exit-code
+      - --
+      - kubernetes/gitops/root
+      - kubernetes/gitops/apps
+  args:
+    chdir: "{{ playbook_dir }}/.."
+  register: gitops_unstaged_check
+  failed_when: gitops_unstaged_check.rc != 0
+  changed_when: false
+  delegate_to: localhost
+  become: false
+  tags: [gitops_check]
+
+- name: Check GitOps manifests have no staged changes
+  ansible.builtin.command:
+    argv:
+      - git
+      - diff
+      - --cached
+      - --exit-code
+      - --
+      - kubernetes/gitops/root
+      - kubernetes/gitops/apps
+  args:
+    chdir: "{{ playbook_dir }}/.."
+  register: gitops_staged_check
+  failed_when: gitops_staged_check.rc != 0
+  changed_when: false
+  delegate_to: localhost
+  become: false
+  tags: [gitops_check]
+
+- name: Check GitOps manifests have no untracked files
+  ansible.builtin.command:
+    argv:
+      - git
+      - ls-files
+      - --others
+      - --exclude-standard
+      - --
+      - kubernetes/gitops/root
+      - kubernetes/gitops/apps
+  args:
+    chdir: "{{ playbook_dir }}/.."
+  register: gitops_untracked_check
+  failed_when: gitops_untracked_check.stdout | trim | length > 0
+  changed_when: false
+  delegate_to: localhost
+  become: false
+  tags: [gitops_check]
+
+- name: Read local Git HEAD
+  ansible.builtin.command:
+    argv:
+      - git
+      - rev-parse
+      - HEAD
+  args:
+    chdir: "{{ playbook_dir }}/.."
+  register: gitops_local_head
+  changed_when: false
+  delegate_to: localhost
+  become: false
+  tags: [gitops_check]
+
+- name: Read configured GitOps remote revision
+  ansible.builtin.command:
+    argv:
+      - git
+      - ls-remote
+      - "{{ gitops_repo_url }}"
+      - "{{ gitops_revision }}"
+      - "refs/heads/{{ gitops_revision }}"
+      - "refs/tags/{{ gitops_revision }}"
+      - "refs/tags/{{ gitops_revision }}^{}"
+  register: gitops_remote_target_refs
+  changed_when: false
+  delegate_to: localhost
+  become: false
+  tags: [gitops_check]
+
+- name: Read remote refs for explicit GitOps commit revision
+  ansible.builtin.command:
+    argv:
+      - git
+      - ls-remote
+      - "{{ gitops_repo_url }}"
+  register: gitops_remote_all_refs
+  changed_when: false
+  when: gitops_revision is match('^[0-9a-fA-F]{40}$')
+  delegate_to: localhost
+  become: false
+  tags: [gitops_check]
+
+- name: Parse configured GitOps remote revision SHAs
+  ansible.builtin.set_fact:
+    gitops_revision_is_explicit_sha: "{{ gitops_revision is match('^[0-9a-fA-F]{40}$') }}"
+    gitops_remote_target_shas: "{{ gitops_remote_target_refs.stdout_lines | map('regex_replace', '\\s.*$', '') | list }}"
+    gitops_remote_all_shas: "{{ (gitops_remote_all_refs.stdout_lines | default([])) | map('regex_replace', '\\s.*$', '') | list }}"
+  tags: [gitops_check]
+
+- name: Fail if configured GitOps branch or tag does not exist remotely
+  ansible.builtin.fail:
+    msg: "gitops_revision={{ gitops_revision }} was not found in gitops_repo_url={{ gitops_repo_url }}."
+  when:
+    - not (gitops_revision_is_explicit_sha | bool)
+    - gitops_remote_target_shas | length == 0
+  delegate_to: localhost
+  become: false
+  tags: [gitops_check]
+
+- name: Fail if local HEAD is not the configured GitOps commit SHA
+  ansible.builtin.fail:
+    msg: "Local HEAD {{ gitops_local_head.stdout }} does not match gitops_revision {{ gitops_revision }}."
+  when:
+    - gitops_revision_is_explicit_sha | bool
+    - gitops_local_head.stdout | lower != gitops_revision | lower
+  delegate_to: localhost
+  become: false
+  tags: [gitops_check]
+
+- name: Fail if local HEAD is not pushed to the configured GitOps branch or tag
+  ansible.builtin.fail:
+    msg: "Local HEAD {{ gitops_local_head.stdout }} does not match remote gitops_revision={{ gitops_revision }} at {{ gitops_repo_url }}."
+  when:
+    - not (gitops_revision_is_explicit_sha | bool)
+    - gitops_local_head.stdout not in gitops_remote_target_shas
+  delegate_to: localhost
+  become: false
+  tags: [gitops_check]
+
+- name: Fail if configured GitOps commit SHA is not advertised by remote
+  ansible.builtin.fail:
+    msg: "gitops_revision {{ gitops_revision }} is not advertised by any remote ref in {{ gitops_repo_url }}."
+  when:
+    - gitops_revision_is_explicit_sha | bool
+    - gitops_local_head.stdout not in gitops_remote_all_shas
+  delegate_to: localhost
+  become: false
+  tags: [gitops_check]
+
+- name: Ensure required namespaces exist
+  kubernetes.core.k8s:
+    name: "{{ item }}"
+    kind: Namespace
+    state: present
+    kubeconfig: /home/k3s-admin/.kube/config
+  become: true
+  become_user: k3s-admin
+  loop:
+    - identity
+    - wisemapping
+    - monitoring
+    - argocd
+
+- name: Apply platform secrets
+  kubernetes.core.k8s:
+    state: present
+    kubeconfig: /home/k3s-admin/.kube/config
+    definition:
+      apiVersion: v1
+      kind: Secret
+      metadata:
+        name: "{{ item.name }}"
+        namespace: "{{ item.namespace }}"
+      type: Opaque
+      stringData: "{{ item.data }}"
+  become: true
+  become_user: k3s-admin
+  no_log: true
+  loop:
+    - name: authentik-secrets
+      namespace: identity
+      data:
+        AUTHENTIK_SECRET_KEY: "{{ platform_secrets.authentik_secret_key }}"
+        AUTHENTIK_POSTGRES_PASSWORD: "{{ platform_secrets.authentik_postgres_password }}"
+        AUTHENTIK_BOOTSTRAP_EMAIL: "{{ platform_secrets.authentik_bootstrap_email }}"
+        AUTHENTIK_BOOTSTRAP_PASSWORD: "{{ platform_secrets.authentik_bootstrap_password }}"
+    - name: leantime-db
+      namespace: default
+      data:
+        MYSQL_ROOT_PASSWORD: "{{ platform_secrets.leantime_db_root_password }}"
+        MYSQL_PASSWORD: "{{ platform_secrets.leantime_db_password }}"
+    - name: leantime-oidc
+      namespace: default
+      data:
+        LEAN_OIDC_ENABLE: "{{ platform_oidc.leantime.enable | string }}"
+        LEAN_OIDC_CLIENT_ID: "{{ platform_oidc.leantime.client_id | default('') }}"
+        LEAN_OIDC_CLIENT_SECRET: "{{ platform_oidc.leantime.client_secret | default('') }}"
+        LEAN_OIDC_PROVIDER_URL: "{{ platform_oidc.leantime.provider_url | default('') }}"
+        LEAN_OIDC_CREATE_USER: "{{ platform_oidc.leantime.create_user | default(true) | string }}"
+        LEAN_OIDC_DEFAULT_ROLE: "{{ platform_oidc.leantime.default_role | default(20) | string }}"
+        LEAN_OIDC_SCOPES: "{{ platform_oidc.leantime.scopes | default('openid,profile,email') }}"
+        LEAN_DISABLE_LOGIN_FORM: "{{ platform_oidc.leantime.disable_login_form | default(false) | string }}"
+    - name: wisemapping-secrets
+      namespace: wisemapping
+      data:
+        WISEMAPPING_POSTGRES_PASSWORD: "{{ platform_secrets.wisemapping_postgres_password }}"
+        WISEMAPPING_JWT_SECRET: "{{ platform_secrets.wisemapping_jwt_secret }}"
+        WISEMAPPING_OAUTH_TOKEN_SECRET: "{{ platform_secrets.wisemapping_oauth_token_secret }}"
+        WISEMAPPING_OAUTH_ENABLED: "{{ platform_oidc.wisemapping.enable | default(false) | string }}"
+        OAUTH_GOOGLE_CLIENT_ID: "{{ platform_oidc.wisemapping.google_client_id | default('') }}"
+        OAUTH_GOOGLE_CLIENT_SECRET: "{{ platform_oidc.wisemapping.google_client_secret | default('') }}"
+        OAUTH_GOOGLE_ISSUER_URI: "{{ platform_oidc.wisemapping.google_issuer_uri | default('') }}"
+    - name: cloudflare-tunnel-token
+      namespace: kube-system
+      data:
+        token: "{{ platform_secrets.cloudflare_tunnel_token }}"
+
+- name: Apply Grafana admin secret
+  kubernetes.core.k8s:
+    state: present
+    kubeconfig: /home/k3s-admin/.kube/config
+    definition:
+      apiVersion: v1
+      kind: Secret
+      metadata:
+        name: grafana-admin
+        namespace: monitoring
+      type: Opaque
+      stringData:
+        admin-user: "{{ platform_secrets.grafana_admin_user }}"
+        admin-password: "{{ platform_secrets.grafana_admin_password }}"
+  become: true
+  become_user: k3s-admin
+  no_log: true
+  when: monitoring_enabled | default(true) | bool
+
+- name: Install Argo CD via Kustomize
+  kubernetes.core.k8s:
+    state: present
+    kubeconfig: /home/k3s-admin/.kube/config
+    definition: "{{ lookup('kubernetes.core.kustomize', dir=playbook_dir + '/../kubernetes/platform/argocd') }}"
+  become: true
+  become_user: k3s-admin
+
+- name: Build Argo CD GitOps repository credential from inline SSH key
+  ansible.builtin.set_fact:
+    gitops_argocd_repository_secret_string_data:
+      type: git
+      url: "{{ gitops_repo_url }}"
+      sshPrivateKey: "{{ gitops_repo_ssh_private_key }}"
+  when:
+    - gitops_repo_private | default(false) | bool
+    - gitops_repo_ssh_private_key | default('') | string | trim | length > 0
+  no_log: true
+
+- name: Build Argo CD GitOps repository credential from SSH key path
+  ansible.builtin.set_fact:
+    gitops_argocd_repository_secret_string_data:
+      type: git
+      url: "{{ gitops_repo_url }}"
+      sshPrivateKey: "{{ lookup('ansible.builtin.file', gitops_repo_ssh_private_key_path) }}"
+  when:
+    - gitops_repo_private | default(false) | bool
+    - gitops_argocd_repository_secret_string_data is not defined
+    - gitops_repo_ssh_private_key_path | default('') | string | trim | length > 0
+  no_log: true
+
+- name: Build Argo CD GitOps repository credential from username and password
+  ansible.builtin.set_fact:
+    gitops_argocd_repository_secret_string_data:
+      type: git
+      url: "{{ gitops_repo_url }}"
+      username: "{{ gitops_repo_username }}"
+      password: "{{ gitops_repo_password }}"
+  when:
+    - gitops_repo_private | default(false) | bool
+    - gitops_argocd_repository_secret_string_data is not defined
+    - gitops_repo_username | default('') | string | trim | length > 0
+    - gitops_repo_password | default('') | string | trim | length > 0
+  no_log: true
+
+- name: Fail if private GitOps repository credential data was not built
+  ansible.builtin.fail:
+    msg: "gitops_repo_private is true, but no usable Argo CD repository credential data was built."
+  when:
+    - gitops_repo_private | default(false) | bool
+    - gitops_argocd_repository_secret_string_data is not defined
+
+- name: Apply Argo CD GitOps repository credentials
+  kubernetes.core.k8s:
+    state: present
+    kubeconfig: /home/k3s-admin/.kube/config
+    definition:
+      apiVersion: v1
+      kind: Secret
+      metadata:
+        name: platform-gitops-repository
+        namespace: argocd
+        labels:
+          argocd.argoproj.io/secret-type: repository
+      type: Opaque
+      stringData: "{{ gitops_argocd_repository_secret_string_data }}"
+  become: true
+  become_user: k3s-admin
+  no_log: true
+  when: gitops_repo_private | default(false) | bool
+
+- name: Wait for Argo CD server to be available
+  kubernetes.core.k8s_info:
+    kind: Deployment
+    name: argocd-server
+    namespace: argocd
+    kubeconfig: /home/k3s-admin/.kube/config
+  become: true
+  become_user: k3s-admin
+  register: argocd_deploy
+  until: argocd_deploy.resources[0].status.availableReplicas | default(0) > 0
+  retries: 30
+  delay: 10
+
+- name: Apply GitOps AppProject
+  kubernetes.core.k8s:
+    state: present
+    kubeconfig: /home/k3s-admin/.kube/config
+    src: "{{ playbook_dir }}/../kubernetes/gitops/root/platform-project.yaml"
+  become: true
+  become_user: k3s-admin
+
+- name: Apply GitOps Applications
+  kubernetes.core.k8s:
+    state: present
+    kubeconfig: /home/k3s-admin/.kube/config
+    src: "{{ playbook_dir }}/../{{ item }}"
+  become: true
+  become_user: k3s-admin
+  loop:
+    - kubernetes/gitops/apps/platform-applications.yaml
+    - kubernetes/gitops/root/platform-root.application.yaml
+
+- name: Wait for root application to reconcile
+  kubernetes.core.k8s_info:
+    api_version: argoproj.io/v1alpha1
+    kind: Application
+    name: platform-root
+    namespace: argocd
+    kubeconfig: /home/k3s-admin/.kube/config
+  become: true
+  become_user: k3s-admin
+  register: root_app
+  until: 
+    - root_app.resources[0].status.sync.status | default('') == 'Synced'
+    - root_app.resources[0].status.health.status | default('') == 'Healthy'
+  retries: 90
+  delay: 10
