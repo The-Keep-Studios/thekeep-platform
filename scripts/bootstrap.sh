@@ -26,7 +26,7 @@ kadmin() {
     sudo -u k3s-admin -H env KUBECONFIG=/home/k3s-admin/.kube/config kubectl "$@"
 }
 
-# 3. Setup HTTPS
+# 3. Setup Local HTTPS
 echo "Generating self-signed certificate for localhost..."
 mkdir -p .certs
 openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
@@ -40,11 +40,46 @@ kadmin create secret tls leantime-tls \
     --key=.certs/tls.key \
     --dry-run=client -o yaml | kadmin apply -f -
 
-# 4. Deploy Leantime
+if [ ! -f kubernetes/apps/leantime/demo-standalone.yaml ]; then
+    echo "Missing manifest: kubernetes/apps/leantime/demo-standalone.yaml"
+    exit 1
+fi
+
+# 4. Cloudflare Tunnel Setup
+echo "Checking for Cloudflare Tunnel Token..."
+CLOUDFLARE_TUNNEL_TOKEN="${CLOUDFLARE_TUNNEL_TOKEN:-}"
+if [ -z "$CLOUDFLARE_TUNNEL_TOKEN" ]; then
+    echo "----------------------------------------------------"
+    echo "INFO: CLOUDFLARE_TUNNEL_TOKEN environment variable is not set."
+    echo "Cloudflare Tunnel will not be deployed."
+    echo "To deploy the tunnel, run:"
+    echo "  export CLOUDFLARE_TUNNEL_TOKEN=<your-token>"
+    echo "  ./scripts/bootstrap.sh"
+    echo "----------------------------------------------------"
+else
+    if [ ! -f kubernetes/platform/cloudflare-tunnel.yaml ]; then
+        echo "Missing manifest: kubernetes/platform/cloudflare-tunnel.yaml"
+        exit 1
+    fi
+
+    echo "Creating Cloudflare Tunnel Token secret..."
+    kadmin create secret generic cloudflare-tunnel-token \
+        -n kube-system \
+        --from-literal=token="$CLOUDFLARE_TUNNEL_TOKEN" \
+        --dry-run=client -o yaml | kadmin apply -f -
+
+    echo "Deploying Cloudflare Tunnel..."
+    kadmin apply -f kubernetes/platform/cloudflare-tunnel.yaml
+
+    echo "Waiting for Cloudflare Tunnel to be ready..."
+    kadmin wait --for=condition=available --timeout=300s deployment/cloudflared -n kube-system
+fi
+
+# 5. Deploy Leantime
 echo "Deploying Leantime Demo..."
 kadmin apply -f kubernetes/apps/leantime/demo-standalone.yaml
 
-# 5. Wait for Readiness
+# 6. Wait for Readiness
 echo "Waiting for MariaDB to be ready..."
 kadmin wait --for=condition=available --timeout=300s deployment/leantime-mariadb
 
@@ -54,18 +89,27 @@ kadmin wait --for=condition=available --timeout=300s deployment/leantime-mailpit
 echo "Waiting for Leantime to be ready..."
 kadmin wait --for=condition=available --timeout=300s deployment/leantime
 
-# 6. Smoke Test
+# 7. Smoke Tests
 if command -v curl >/dev/null 2>&1; then
     echo "Running HTTPS smoke test..."
     curl -skI https://localhost >/dev/null
+
+    echo "Running Mailpit smoke test..."
+    curl -sfI http://localhost:30082 >/dev/null
 fi
 
 echo ""
 echo "===================================================="
 echo "Demo is ready! (Isolated via k3s-admin user)"
-echo "Access at: https://localhost"
+echo "Local Access: https://localhost"
 echo "Mail inbox (demo SMTP sink): http://localhost:30082"
 echo ""
-echo "If onboarding redirects you to login without setting a password,"
-echo "open Mailpit and use the invite/reset email link."
+echo "If onboarding redirects you to login before password setup,"
+echo "open Mailpit and use the invite/reset link."
+if [ -n "$CLOUDFLARE_TUNNEL_TOKEN" ]; then
+    echo ""
+    echo "Cloudflare tunnel is deployed."
+    echo "This demo bootstrap does not configure platform SSO."
+    echo "For Authentik-based production SSO, use: ./bootstrap-production.sh"
+fi
 echo "===================================================="

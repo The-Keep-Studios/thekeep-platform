@@ -1,0 +1,248 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: gitlab
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: gitlab-config
+  namespace: gitlab
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: gitlab-logs
+  namespace: gitlab
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: gitlab-data
+  namespace: gitlab
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 30Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gitlab
+  namespace: gitlab
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: gitlab
+  template:
+    metadata:
+      labels:
+        app: gitlab
+    spec:
+      containers:
+      - name: gitlab
+        image: gitlab/gitlab-ce:latest
+        imagePullPolicy: IfNotPresent
+        env:
+        - name: GITLAB_OMNIBUS_CONFIG
+          value: |
+            external_url ENV.fetch("GITLAB_EXTERNAL_URL", "https://gitlab.thekeepstudios.com")
+            nginx['listen_port'] = 80
+            nginx['listen_https'] = false
+            # Lightweight baseline for low-traffic single-node deployments.
+            # Keep internal Prometheus enabled for GitLab health/metrics visibility.
+            prometheus_monitoring['enable'] = true
+            puma['worker_processes'] = 1
+            sidekiq['concurrency'] = 5
+            gitlab_rails['initial_root_password'] = ENV.fetch("GITLAB_ROOT_PASSWORD", nil)
+            gitlab_rails['initial_root_email'] = ENV.fetch("GITLAB_ROOT_EMAIL", "root@gitlab.thekeepstudios.com")
+            if ENV.fetch("OIDC_ENABLED", "false") == "true"
+              gitlab_rails['omniauth_enabled'] = true
+              gitlab_rails['omniauth_allow_single_sign_on'] = ['openid_connect']
+              gitlab_rails['omniauth_block_auto_created_users'] = false
+              gitlab_rails['omniauth_auto_link_user'] = ['openid_connect']
+              gitlab_rails['omniauth_auto_link_saml_user'] = false
+              gitlab_rails['omniauth_providers'] = [
+                {
+                  name: "openid_connect",
+                  label: ENV.fetch("OIDC_LABEL", "Authentik"),
+                  args: {
+                    name: "openid_connect",
+                    scope: ["openid", "profile", "email"],
+                    response_type: "code",
+                    issuer: ENV.fetch("OIDC_ISSUER", "https://auth.thekeepstudios.com/application/o/gitlab/"),
+                    discovery: true,
+                    client_auth_method: "basic",
+                    uid_field: ENV.fetch("OIDC_UID_FIELD", "sub"),
+                    pkce: true,
+                    client_options: {
+                      identifier: ENV.fetch("OIDC_CLIENT_ID", ""),
+                      secret: ENV.fetch("OIDC_CLIENT_SECRET", ""),
+                      redirect_uri: ENV.fetch("GITLAB_EXTERNAL_URL", "https://gitlab.thekeepstudios.com") + "/users/auth/openid_connect/callback"
+                    }
+                  }
+                }
+              ]
+            else
+              gitlab_rails['omniauth_enabled'] = false
+            end
+        - name: GITLAB_ROOT_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: gitlab-secrets
+              key: GITLAB_ROOT_PASSWORD
+        - name: GITLAB_ROOT_EMAIL
+          valueFrom:
+            secretKeyRef:
+              name: gitlab-secrets
+              key: GITLAB_ROOT_EMAIL
+        - name: GITLAB_EXTERNAL_URL
+          valueFrom:
+            secretKeyRef:
+              name: gitlab-secrets
+              key: GITLAB_EXTERNAL_URL
+        - name: OIDC_ENABLED
+          valueFrom:
+            secretKeyRef:
+              name: gitlab-secrets
+              key: OIDC_ENABLED
+        - name: OIDC_LABEL
+          valueFrom:
+            secretKeyRef:
+              name: gitlab-secrets
+              key: OIDC_LABEL
+        - name: OIDC_ISSUER
+          valueFrom:
+            secretKeyRef:
+              name: gitlab-secrets
+              key: OIDC_ISSUER
+        - name: OIDC_UID_FIELD
+          valueFrom:
+            secretKeyRef:
+              name: gitlab-secrets
+              key: OIDC_UID_FIELD
+        - name: OIDC_CLIENT_ID
+          valueFrom:
+            secretKeyRef:
+              name: gitlab-secrets
+              key: OIDC_CLIENT_ID
+        - name: OIDC_CLIENT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: gitlab-secrets
+              key: OIDC_CLIENT_SECRET
+        ports:
+        - name: http
+          containerPort: 80
+        - name: ssh
+          containerPort: 22
+        startupProbe:
+          tcpSocket:
+            port: http
+          periodSeconds: 10
+          failureThreshold: 180
+          timeoutSeconds: 5
+        readinessProbe:
+          tcpSocket:
+            port: http
+          initialDelaySeconds: 20
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 12
+        livenessProbe:
+          tcpSocket:
+            port: http
+          initialDelaySeconds: 40
+          periodSeconds: 20
+          timeoutSeconds: 5
+          failureThreshold: 6
+        resources:
+          requests:
+            cpu: "250m"
+            memory: "1536Mi"
+          limits:
+            cpu: "2000m"
+            memory: "4Gi"
+        volumeMounts:
+        - name: config
+          mountPath: /etc/gitlab
+        - name: logs
+          mountPath: /var/log/gitlab
+        - name: data
+          mountPath: /var/opt/gitlab
+      volumes:
+      - name: config
+        persistentVolumeClaim:
+          claimName: gitlab-config
+      - name: logs
+        persistentVolumeClaim:
+          claimName: gitlab-logs
+      - name: data
+        persistentVolumeClaim:
+          claimName: gitlab-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gitlab-web
+  namespace: gitlab
+spec:
+  type: ClusterIP
+  selector:
+    app: gitlab
+  ports:
+  - name: http
+    port: 80
+    targetPort: http
+    protocol: TCP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gitlab-ssh
+  namespace: gitlab
+spec:
+  type: NodePort
+  selector:
+    app: gitlab
+  ports:
+  - name: ssh
+    port: 22
+    targetPort: ssh
+    nodePort: 30022
+    protocol: TCP
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: gitlab-ingress
+  namespace: gitlab
+  annotations:
+    traefik.ingress.kubernetes.io/service.serversscheme: http
+spec:
+  rules:
+  - host: gitlab.thekeepstudios.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: gitlab-web
+            port:
+              number: 80

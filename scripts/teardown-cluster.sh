@@ -20,10 +20,16 @@ sudo rm -f /etc/sudoers.d/k3s-admin || true
 if id k3s-admin >/dev/null 2>&1; then
     # Ensure no lingering processes keep the account/group locked.
     sudo pkill -u k3s-admin || true
-    sleep 1
+    for _ in 1 2 3 4 5; do
+        if ! pgrep -u k3s-admin >/dev/null 2>&1; then
+            break
+        fi
+        sudo pkill -9 -u k3s-admin || true
+        sleep 1
+    done
     sudo deluser --remove-home k3s-admin || true
 fi
-if getent group k3s >/dev/null 2>&1; then
+if ! id k3s-admin >/dev/null 2>&1 && getent group k3s >/dev/null 2>&1; then
     sudo delgroup k3s || true
 fi
 

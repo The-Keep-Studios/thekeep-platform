@@ -1,95 +1,131 @@
-# Resolve + K3s Bootstrap
+# Resolve + K3s Platform Bootstrap
 
-The repository currently supports two tracks:
-- **1-hour Leantime demo** (current priority; architecture in `designdoc.md`)
-- **Original Resolve + optional K3s workloads** (legacy functionality kept working)
+Current priority is the production-like path: central in-cluster identity (Authentik) + app integrations.
+Design source of truth: [designdoc.md](designdoc.md). README is an operator runbook.
 
-## 1-hour demo (recommended path)
+## Production-Like Path (Recommended)
 
-This is the fastest path to validate Leantime UX on a single machine.
+This path bootstraps a single-node K3s stack that mirrors the production architecture direction:
+- `auth.thekeepstudios.com` -> Authentik (identity hub)
+- `projects.thekeepstudios.com` -> Leantime
+- `gitlab.thekeepstudios.com` -> GitLab
+- `mindmaps.thekeepstudios.com` -> Wisemapping
+- `grafana.thekeepstudios.com` -> Grafana
+- `prometheus.thekeepstudios.com` -> Prometheus UI
+- `alerts.thekeepstudios.com` -> Alertmanager UI
+
+### 1. Configure secrets and URLs
+
+```bash
+cp scripts/production.env.example scripts/production.env
+```
+
+Edit `scripts/production.env` and set required values (do not commit this file).
+Monitoring is enabled by default and requires `GRAFANA_ADMIN_USER` / `GRAFANA_ADMIN_PASSWORD`.
+
+### 2. Bootstrap
+
+```bash
+./bootstrap-production.sh
+```
+
+Equivalent:
+
+```bash
+./scripts/bootstrap-production.sh
+```
+
+K3s is managed by systemd and enabled at boot, so workloads should recover after host reboot without interactive user login.
+
+### 3. Optional Cloudflare Tunnel
+
+If you are using Cloudflare Tunnel for ingress transport, set:
+
+```bash
+export CLOUDFLARE_TUNNEL_TOKEN=<your-token>
+./bootstrap-production.sh
+```
+
+Cloudflare Access is not used as the primary auth plane in this architecture.
+
+### 4. Monitoring Stack (Built-In)
+
+`bootstrap-production.sh` deploys:
+- `kube-prometheus-stack` (Prometheus operator, Prometheus, Alertmanager, Grafana)
+- `loki-stack` (Loki + Promtail for cluster/app logs)
+
+Logs from all pods are shipped by Promtail to Loki, and Grafana is preconfigured with a Loki datasource (`http://loki:3100`).
+
+## Authentik Integration Flow
+
+### Google as upstream identity
+
+Configure Google once in Authentik as a social/federated source.
+
+Authentik admin bootstrap note:
+- `AUTHENTIK_BOOTSTRAP_PASSWORD` is only read on first startup of a fresh Authentik DB.
+- If login fails after changing env values later, reset directly in-cluster:
+  `sudo -u k3s-admin -H env KUBECONFIG=/home/k3s-admin/.kube/config kubectl exec -it deployment/authentik-server -n identity -- ak changepassword akadmin`
+
+### App providers in Authentik
+
+Create OAuth2/OIDC providers in Authentik for each app with callback URLs:
+- Leantime: `https://projects.thekeepstudios.com/oidc/callback`
+- GitLab: `https://gitlab.thekeepstudios.com/users/auth/openid_connect/callback`
+- Wisemapping: `https://mindmaps.thekeepstudios.com/login/oauth2/code/google`
+
+Then copy provider values into `scripts/production.env`:
+- Leantime -> `LEAN_OIDC_*`
+- GitLab -> `OIDC_*`
+- Wisemapping -> `OAUTH_GOOGLE_*` + `WISEMAPPING_OAUTH_ENABLED=true`
+
+Re-run:
+
+```bash
+./bootstrap-production.sh
+```
+
+Break-glass local login can stay enabled during rollout:
+- Leantime: `LEAN_DISABLE_LOGIN_FORM=false`
+- GitLab: local root account retained
+
+GitLab manifest ships with a lightweight single-node profile (reduced resources + reduced Puma/Sidekiq concurrency). Increase sizing before multi-user/high-throughput use.
+
+## Manifest Locations
+
+- Authentik: `kubernetes/platform/authentik/standalone.yaml`
+- Leantime production: `kubernetes/apps/leantime/production.yaml`
+- GitLab: `kubernetes/apps/gitlab/standalone.yaml`
+- Wisemapping production: `kubernetes/apps/wisemapping/production.yaml`
+- Monitoring values: `kubernetes/platform/monitoring/*.values.yaml`
+- Optional Cloudflare tunnel: `kubernetes/platform/cloudflare-tunnel.yaml`
+
+## 1-Hour Demo Path (Legacy Fast Validation)
 
 ```bash
 ./bootstrap.sh
 ```
 
 Then open:
-
 - `https://localhost`
-- `http://localhost:30082` (Mailpit inbox for demo emails)
+- `http://localhost:30082` (Mailpit inbox)
 
-When done:
+Teardown:
 
 ```bash
 ./teardown-cluster.sh
 ```
 
-What this path does:
-- Creates isolated `k3s-admin` management user/group
-- Installs single-node K3s
-- Generates self-signed TLS cert for `localhost`
-- Deploys Leantime + in-cluster MariaDB + ingress
-- Deploys Mailpit so invite/reset emails work in the demo
+## Legacy Ansible Roles (Still Supported)
 
-## Original Ansible functionality (still supported)
-
-### Resolve Studio install
-
-Download Blackmagic installer manually (license requirement):
-
-- Linux: `DaVinci_Resolve_Studio_20.3.2_Linux.run` -> `./files/`
-- macOS: `DaVinci_Resolve_Studio*.dmg` -> `./files/`
-
-Install Resolve role:
+Resolve install:
 
 ```bash
 ansible-playbook -K site.yml --tags resolve
 ```
 
-Launch Resolve:
-
-```bash
-resolve
-```
-
-### K3s + workload roles
+K3s + LocalAI + Wisemapping standalone:
 
 ```bash
 ansible-playbook -K site.yml --tags k3s,localai,wisemapping
-```
-
-Or individually:
-
-```bash
-ansible-playbook -K site.yml --tags k3s,localai
-ansible-playbook -K site.yml --tags k3s,wisemapping
-```
-
-Service defaults:
-- Leantime demo NodePort: `30080` (plus ingress `https://localhost`)
-- Mailpit inbox NodePort: `30082`
-- Wisemapping NodePort: `30081`
-- LocalAI service: `ClusterIP` on `8080` by default
-
-Configuration is manifest-first. Edit:
-- `kubernetes/apps/leantime/demo-standalone.yaml`
-- `kubernetes/apps/localai/standalone.yaml`
-- `kubernetes/apps/wisemapping/standalone.yaml`
-
-## Notes
-
-- If you use Wayland, Resolve is often less stable than Xorg.
-- Mint 22 / Ubuntu 24.04 may require `libssl1.1`; the role installs it from Ubuntu pool packages.
-
-## Troubleshooting (Leantime onboarding)
-
-If setup redirects to login before you set a password:
-
-1. Open Mailpit at `http://localhost:30082` and use the invite/reset email link.
-2. If needed, print the current invite link directly from DB:
-
-```bash
-sudo -u k3s-admin -H env KUBECONFIG=/home/k3s-admin/.kube/config \
-  kubectl exec deploy/leantime-mariadb -- \
-  mariadb -uleantime -pleantime-pass leantime -Nse \
-  "SELECT CONCAT('https://localhost/auth/userInvite/', pwReset) FROM zp_user WHERE id=1;"
 ```

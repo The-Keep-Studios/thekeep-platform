@@ -1,31 +1,20 @@
+# 1. MariaDB for Leantime
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: leantime-data
+  name: leantime-mariadb-pvc
 spec:
-  accessModes:
-    - ReadWriteOnce
+  accessModes: [ReadWriteOnce]
   resources:
     requests:
-      storage: 1Gi
+      storage: 5Gi
 ---
 apiVersion: v1
 kind: ConfigMap
 metadata:
   name: leantime-runtime-defaults
 data:
-  LEAN_APP_URL: "https://localhost"
----
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: leantime-mariadb-data
-spec:
-  accessModes:
-    - ReadWriteOnce
-  resources:
-    requests:
-      storage: 2Gi
+  LEAN_APP_URL: "https://projects.thekeepstudios.com"
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -47,18 +36,18 @@ spec:
       - name: mariadb
         image: mariadb:11
         imagePullPolicy: IfNotPresent
-        ports:
-        - name: mysql
-          containerPort: 3306
         env:
         - name: MYSQL_ROOT_PASSWORD
-          value: "leantime-root-pass"
+          value: "root-password-change-me"
         - name: MYSQL_DATABASE
           value: "leantime"
         - name: MYSQL_USER
-          value: "leantime"
+          value: "leantime_user"
         - name: MYSQL_PASSWORD
-          value: "leantime-pass"
+          value: "leantime-password-change-me"
+        ports:
+        - name: mysql
+          containerPort: 3306
         readinessProbe:
           exec:
             command:
@@ -80,12 +69,12 @@ spec:
           timeoutSeconds: 5
           failureThreshold: 6
         volumeMounts:
-        - name: mariadb-data
+        - name: db-data
           mountPath: /var/lib/mysql
       volumes:
-      - name: mariadb-data
+      - name: db-data
         persistentVolumeClaim:
-          claimName: leantime-mariadb-data
+          claimName: leantime-mariadb-pvc
 ---
 apiVersion: v1
 kind: Service
@@ -100,74 +89,16 @@ spec:
   selector:
     app: leantime-mariadb
 ---
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: leantime-mailpit
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: leantime-mailpit
-  template:
-    metadata:
-      labels:
-        app: leantime-mailpit
-    spec:
-      containers:
-      - name: mailpit
-        image: axllent/mailpit:latest
-        imagePullPolicy: IfNotPresent
-        ports:
-        - name: smtp
-          containerPort: 1025
-        - name: http
-          containerPort: 8025
-        readinessProbe:
-          tcpSocket:
-            port: http
-          initialDelaySeconds: 5
-          periodSeconds: 10
-          timeoutSeconds: 5
-        livenessProbe:
-          tcpSocket:
-            port: http
-          initialDelaySeconds: 20
-          periodSeconds: 20
-          timeoutSeconds: 5
----
+# 2. Leantime Application
 apiVersion: v1
-kind: Service
+kind: PersistentVolumeClaim
 metadata:
-  name: leantime-mailpit
+  name: leantime-app-pvc
 spec:
-  type: ClusterIP
-  ports:
-  - name: smtp
-    port: 1025
-    targetPort: smtp
-    protocol: TCP
-  - name: http
-    port: 8025
-    targetPort: http
-    protocol: TCP
-  selector:
-    app: leantime-mailpit
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: leantime-mailpit-ui
-spec:
-  type: NodePort
-  ports:
-  - name: http
-    port: 8025
-    targetPort: http
-    nodePort: 30082
-    protocol: TCP
-  selector:
-    app: leantime-mailpit
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 2Gi
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -191,7 +122,7 @@ spec:
         - sh
         - -c
         - |
-          until mariadb-admin ping -h leantime-mariadb -uleantime -pleantime-pass --silent; do
+          until mariadb-admin ping -h leantime-mariadb -uleantime_user -pleantime-password-change-me --silent; do
             echo "waiting for leantime-mariadb to become ready"
             sleep 2
           done
@@ -215,24 +146,12 @@ spec:
           value: "leantime-mariadb"
         - name: LEAN_DB_PORT
           value: "3306"
+        - name: LEAN_DB_USER
+          value: "leantime_user"
+        - name: LEAN_DB_PASSWORD
+          value: "leantime-password-change-me"
         - name: LEAN_DB_DATABASE
           value: "leantime"
-        - name: LEAN_DB_USER
-          value: "leantime"
-        - name: LEAN_DB_PASSWORD
-          value: "leantime-pass"
-        - name: LEAN_EMAIL_RETURN
-          value: "noreply@localhost"
-        - name: LEAN_EMAIL_USE_SMTP
-          value: "true"
-        - name: LEAN_EMAIL_SMTP_HOSTS
-          value: "leantime-mailpit"
-        - name: LEAN_EMAIL_SMTP_AUTH
-          value: "false"
-        - name: LEAN_EMAIL_SMTP_AUTO_TLS
-          value: "false"
-        - name: LEAN_EMAIL_SMTP_PORT
-          value: "1025"
         readinessProbe:
           httpGet:
             path: /auth/login
@@ -255,20 +174,19 @@ spec:
       volumes:
       - name: leantime-vol
         persistentVolumeClaim:
-          claimName: leantime-data
+          claimName: leantime-app-pvc
 ---
 apiVersion: v1
 kind: Service
 metadata:
   name: leantime
 spec:
-  type: NodePort
+  type: ClusterIP
   ports:
-  - port: 80
+  - name: http
+    port: 80
     targetPort: 8080
-    nodePort: 30080
     protocol: TCP
-    name: http
   selector:
     app: leantime
 ---
@@ -279,12 +197,8 @@ metadata:
   annotations:
     traefik.ingress.kubernetes.io/service.serversscheme: http
 spec:
-  tls:
-  - hosts:
-    - localhost
-    secretName: leantime-tls
   rules:
-  - host: localhost
+  - host: projects.thekeepstudios.com
     http:
       paths:
       - path: /

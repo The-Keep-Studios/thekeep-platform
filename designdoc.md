@@ -24,6 +24,7 @@ The physical layer is heterogeneous, residing entirely on local networks before 
 ### Networking & DNS Rules
 * **Local Domain:** `*.rochester.thekeepstudios.com`
 * **Public Domains:** `thekeepstudios.com`, `fullheartsroc.org`
+* **Production-Like App FQDNs:** `auth.thekeepstudios.com`, `projects.thekeepstudios.com`, `gitlab.thekeepstudios.com`, `mindmaps.thekeepstudios.com`, `grafana.thekeepstudios.com`, `prometheus.thekeepstudios.com`, `alerts.thekeepstudios.com`
 * **DNS Resolution:** The Raspberry Pi runs **AdGuard Home** acting as the local network's primary DNS. A wildcard rewrite routes `*.rochester.thekeepstudios.com` to the MetalLB IP pool of the K3s cluster.
 * **IP Management:** DHCP reservations on the router for physical MAC addresses; **MetalLB** handles Layer 2 routing for K8s LoadBalancer services.
 
@@ -49,7 +50,7 @@ Before workloads are deployed, the following services must be instantiated in th
     * **Cert-Manager:** Automates SSL certificate provisioning via Let's Encrypt (DNS-01 challenge for local/internal domains via Cloudflare API).
 2.  **Observability & Monitoring (Grafana Stack):**
     * **Deployment:** `kube-prometheus-stack` (Helm).
-    * **Components:** Prometheus (metrics scraper), Alertmanager (routing alerts), and **Grafana** (Visualization).
+    * **Components:** Prometheus (metrics scraper), Alertmanager (routing alerts), **Grafana** (Visualization), and Loki + Promtail for centralized log aggregation.
     * **Dashboards:** Pre-load dashboards for K3s node health, Longhorn volume health, and GPU utilization (via DCGM exporter).
 3.  **Local Load Balancing:**
     * **MetalLB:** Configured in L2 mode to broadcast the cluster's presence to the local router.
