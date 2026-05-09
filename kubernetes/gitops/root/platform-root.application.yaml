@@ -7,7 +7,7 @@ spec:
   project: platform
   source:
     repoURL: "iantsmall@192.168.0.46:~/git/resolve-ansible-boilerplate.git"
-    targetRevision: "feature/productionReadyK8s"
+    targetRevision: "main"
     path: kubernetes/gitops/apps
     directory:
       recurse: true

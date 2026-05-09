@@ -7,7 +7,7 @@ spec:
   project: platform
   source:
     repoURL: "iantsmall@192.168.0.46:~/git/resolve-ansible-boilerplate.git"
-    targetRevision: "feature/productionReadyK8s"
+    targetRevision: "main"
     path: kubernetes/platform/cloudflared
   destination:
     server: https://kubernetes.default.svc
@@ -28,7 +28,7 @@ spec:
   project: platform
   source:
     repoURL: "iantsmall@192.168.0.46:~/git/resolve-ansible-boilerplate.git"
-    targetRevision: "feature/productionReadyK8s"
+    targetRevision: "main"
     path: kubernetes/platform/authentik
   destination:
     server: https://kubernetes.default.svc
@@ -50,7 +50,7 @@ spec:
   project: platform
   source:
     repoURL: "iantsmall@192.168.0.46:~/git/resolve-ansible-boilerplate.git"
-    targetRevision: "feature/productionReadyK8s"
+    targetRevision: "main"
     path: kubernetes/apps/leantime
   destination:
     server: https://kubernetes.default.svc
@@ -72,7 +72,7 @@ spec:
   project: platform
   source:
     repoURL: "iantsmall@192.168.0.46:~/git/resolve-ansible-boilerplate.git"
-    targetRevision: "feature/productionReadyK8s"
+    targetRevision: "main"
     path: kubernetes/apps/wisemapping
   destination:
     server: https://kubernetes.default.svc
@@ -101,7 +101,7 @@ spec:
       valueFiles:
       - $values/kubernetes/platform/monitoring/kube-prometheus-stack.values.yaml
   - repoURL: "iantsmall@192.168.0.46:~/git/resolve-ansible-boilerplate.git"
-    targetRevision: "feature/productionReadyK8s"
+    targetRevision: "main"
     ref: values
   destination:
     server: https://kubernetes.default.svc
@@ -130,7 +130,7 @@ spec:
       valueFiles:
       - $values/kubernetes/platform/monitoring/loki-stack.values.yaml
   - repoURL: "iantsmall@192.168.0.46:~/git/resolve-ansible-boilerplate.git"
-    targetRevision: "feature/productionReadyK8s"
+    targetRevision: "main"
     ref: values
   destination:
     server: https://kubernetes.default.svc
