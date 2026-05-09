@@ -6,7 +6,7 @@ metadata:
 spec:
   description: Platform workloads for The Keep Studios
   sourceRepos:
-  - "iantsmall@192.168.0.46:~/git/resolve-ansible-boilerplate.git"
+  - "https://github.com/The-Keep-Studios/thekeep-platform.git"
   - https://prometheus-community.github.io/helm-charts
   - https://grafana.github.io/helm-charts
   destinations:

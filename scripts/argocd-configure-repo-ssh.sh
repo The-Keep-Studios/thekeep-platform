@@ -7,7 +7,7 @@ SECRET_NAME="${GITOPS_REPO_SECRET_NAME:-platform-gitops-repo}"
 
 if [ -z "${REPO_URL}" ] || [ -z "${SSH_KEY_PATH}" ]; then
   echo "Usage:"
-  echo "  export GITOPS_REPO_URL=ssh://git@<host>/<path>/resolve-ansible-boilerplate.git"
+  echo "  export GITOPS_REPO_URL=git@github.com:The-Keep-Studios/thekeep-platform.git"
   echo "  export GITOPS_SSH_PRIVATE_KEY_PATH=/path/to/private/key"
   echo "  bash scripts/argocd-configure-repo-ssh.sh"
   exit 1

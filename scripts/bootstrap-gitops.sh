@@ -16,7 +16,7 @@ RENDERED_APPS="kubernetes/gitops/apps/platform-applications.yaml"
 if [ -z "${GITOPS_REPO_URL}" ]; then
   echo "Missing required environment variable: GITOPS_REPO_URL"
   echo "Example:"
-  echo "  export GITOPS_REPO_URL=ssh://git@<host>/<path>/resolve-ansible-boilerplate.git"
+  echo "  export GITOPS_REPO_URL=https://github.com/The-Keep-Studios/thekeep-platform.git"
   echo "  export GITOPS_REVISION=feature/productionReadyK8s"
   echo "  bash scripts/bootstrap-gitops.sh"
   exit 1
