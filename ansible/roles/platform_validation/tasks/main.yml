@@ -159,7 +159,7 @@
       - "{{ platform_kubectl }}"
       - apply
       - -f
-      - -
+      - "-"
   args:
     stdin: |
       apiVersion: v1

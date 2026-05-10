@@ -224,7 +224,7 @@
       - "{{ platform_kubectl }}"
       - apply
       - -f
-      - -
+      - "-"
   args:
     stdin: |
       apiVersion: v1
@@ -250,7 +250,7 @@
       - "{{ platform_kubectl }}"
       - apply
       - -f
-      - -
+      - "-"
   args:
     stdin: >-
       {{
@@ -314,7 +314,7 @@
       - "{{ platform_kubectl }}"
       - apply
       - -f
-      - -
+      - "-"
   args:
     stdin: >-
       {{
@@ -353,7 +353,7 @@
       - "{{ platform_kubectl }}"
       - apply
       - -f
-      - -
+      - "-"
   args:
     stdin: "{{ argocd_kustomize_manifest.stdout }}"
   become: true
@@ -410,7 +410,7 @@
       - "{{ platform_kubectl }}"
       - apply
       - -f
-      - -
+      - "-"
   args:
     stdin: >-
       {{
@@ -455,7 +455,7 @@
       - "{{ platform_kubectl }}"
       - apply
       - -f
-      - -
+      - "-"
   args:
     stdin: "{{ lookup('ansible.builtin.file', playbook_dir + '/../kubernetes/gitops/root/platform-project.yaml') }}"
   become: true
@@ -468,7 +468,7 @@
       - "{{ platform_kubectl }}"
       - apply
       - -f
-      - -
+      - "-"
   args:
     stdin: "{{ lookup('ansible.builtin.file', playbook_dir + '/../' + item) }}"
   become: true
