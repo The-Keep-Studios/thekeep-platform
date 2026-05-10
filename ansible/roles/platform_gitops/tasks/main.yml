@@ -239,7 +239,9 @@
     - wisemapping
     - monitoring
     - argocd
-  changed_when: "'created' in namespace_apply.stdout or 'configured' in namespace_apply.stdout"
+  changed_when: >
+    namespace_apply.stdout is defined and
+    ('created' in namespace_apply.stdout or 'configured' in namespace_apply.stdout)
   register: namespace_apply
 
 - name: Apply platform secrets
