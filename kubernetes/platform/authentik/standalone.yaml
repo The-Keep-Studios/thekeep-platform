@@ -341,12 +341,24 @@ spec:
     targetPort: http
     protocol: TCP
 ---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: authentik-forwarded-headers
+  namespace: identity
+spec:
+  headers:
+    customRequestHeaders:
+      X-Forwarded-Proto: "https"
+      X-Forwarded-Ssl: "on"
+---
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: authentik-ingress
   namespace: identity
   annotations:
+    traefik.ingress.kubernetes.io/router.middlewares: identity-authentik-forwarded-headers@kubernetescrd
     traefik.ingress.kubernetes.io/service.serversscheme: http
 spec:
   rules:

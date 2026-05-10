@@ -49,6 +49,10 @@ platform_oidc:
   wisemapping:
     enable: false
 
+platform_email:
+  leantime:
+    use_smtp: false
+
 monitoring_enabled: true
 require_external_https: true
 direct_http_urls: []

@@ -293,6 +293,19 @@
         LEAN_OIDC_DEFAULT_ROLE: "{{ platform_oidc.leantime.default_role | default(20) | string }}"
         LEAN_OIDC_SCOPES: "{{ platform_oidc.leantime.scopes | default('openid,profile,email') }}"
         LEAN_DISABLE_LOGIN_FORM: "{{ platform_oidc.leantime.disable_login_form | default(false) | string }}"
+    - name: leantime-email
+      namespace: default
+      data:
+        LEAN_EMAIL_RETURN: "{{ platform_email.leantime.return | default('') }}"
+        LEAN_EMAIL_USE_SMTP: "{{ platform_email.leantime.use_smtp | default(false) | string }}"
+        LEAN_EMAIL_SMTP_HOSTS: "{{ platform_email.leantime.smtp_hosts | default('') }}"
+        LEAN_EMAIL_SMTP_AUTH: "{{ platform_email.leantime.smtp_auth | default(true) | string }}"
+        LEAN_EMAIL_SMTP_USERNAME: "{{ platform_email.leantime.smtp_username | default('') }}"
+        LEAN_EMAIL_SMTP_PASSWORD: "{{ platform_email.leantime.smtp_password | default('') }}"
+        LEAN_EMAIL_SMTP_AUTO_TLS: "{{ platform_email.leantime.smtp_auto_tls | default(true) | string }}"
+        LEAN_EMAIL_SMTP_SECURE: "{{ platform_email.leantime.smtp_secure | default('') }}"
+        LEAN_EMAIL_SMTP_SSLNOVERIFY: "{{ platform_email.leantime.smtp_ssl_noverify | default(false) | string }}"
+        LEAN_EMAIL_SMTP_PORT: "{{ platform_email.leantime.smtp_port | default('') }}"
     - name: wisemapping-secrets
       namespace: wisemapping
       data:
