@@ -5,3 +5,5 @@
 /backups/
 ansible/production_vars.yml
 .output.txt
+/ansible/inventory.production.ini
+/ansible/production_vars.yml
