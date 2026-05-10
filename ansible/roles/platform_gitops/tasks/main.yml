@@ -352,6 +352,8 @@
     argv:
       - "{{ platform_kubectl }}"
       - apply
+      - "--server-side"
+      - "--force-conflicts"
       - -f
       - "-"
   args:
