@@ -7,7 +7,7 @@ spec:
   project: platform
   source:
     repoURL: "https://github.com/The-Keep-Studios/thekeep-platform.git"
-    targetRevision: "main"
+    targetRevision: "hotfix/k3s-admin-ansible-bootstrap"
     path: kubernetes/gitops/apps
     directory:
       recurse: true
