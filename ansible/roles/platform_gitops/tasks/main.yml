@@ -212,34 +212,60 @@
   become: false
   tags: [gitops_check]
 
+- name: Define kubectl execution context
+  ansible.builtin.set_fact:
+    platform_kubectl: /usr/local/bin/kubectl
+    platform_kubectl_env:
+      KUBECONFIG: /home/k3s-admin/.kube/config
+
 - name: Ensure required namespaces exist
-  kubernetes.core.k8s:
-    name: "{{ item }}"
-    kind: Namespace
-    state: present
-    kubeconfig: /home/k3s-admin/.kube/config
+  ansible.builtin.command:
+    argv:
+      - "{{ platform_kubectl }}"
+      - apply
+      - -f
+      - -
+  args:
+    stdin: |
+      apiVersion: v1
+      kind: Namespace
+      metadata:
+        name: {{ item }}
   become: true
   become_user: k3s-admin
+  environment: "{{ platform_kubectl_env }}"
   loop:
     - identity
     - wisemapping
     - monitoring
     - argocd
+  changed_when: "'created' in namespace_apply.stdout or 'configured' in namespace_apply.stdout"
+  register: namespace_apply
 
 - name: Apply platform secrets
-  kubernetes.core.k8s:
-    state: present
-    kubeconfig: /home/k3s-admin/.kube/config
-    definition:
-      apiVersion: v1
-      kind: Secret
-      metadata:
-        name: "{{ item.name }}"
-        namespace: "{{ item.namespace }}"
-      type: Opaque
-      stringData: "{{ item.data }}"
+  ansible.builtin.command:
+    argv:
+      - "{{ platform_kubectl }}"
+      - apply
+      - -f
+      - -
+  args:
+    stdin: >-
+      {{
+        {
+          'apiVersion': 'v1',
+          'kind': 'Secret',
+          'metadata': {
+            'name': item.name,
+            'namespace': item.namespace
+          },
+          'type': 'Opaque',
+          'stringData': item.data
+        } | to_nice_yaml
+      }}
   become: true
   become_user: k3s-admin
+  environment: "{{ platform_kubectl_env }}"
   no_log: true
   loop:
     - name: authentik-secrets
@@ -281,31 +307,56 @@
         token: "{{ platform_secrets.cloudflare_tunnel_token }}"
 
 - name: Apply Grafana admin secret
-  kubernetes.core.k8s:
-    state: present
-    kubeconfig: /home/k3s-admin/.kube/config
-    definition:
-      apiVersion: v1
-      kind: Secret
-      metadata:
-        name: grafana-admin
-        namespace: monitoring
-      type: Opaque
-      stringData:
-        admin-user: "{{ platform_secrets.grafana_admin_user }}"
-        admin-password: "{{ platform_secrets.grafana_admin_password }}"
+  ansible.builtin.command:
+    argv:
+      - "{{ platform_kubectl }}"
+      - apply
+      - -f
+      - -
+  args:
+    stdin: >-
+      {{
+        {
+          'apiVersion': 'v1',
+          'kind': 'Secret',
+          'metadata': {
+            'name': 'grafana-admin',
+            'namespace': 'monitoring'
+          },
+          'type': 'Opaque',
+          'stringData': {
+            'admin-user': platform_secrets.grafana_admin_user,
+            'admin-password': platform_secrets.grafana_admin_password
+          }
+        } | to_nice_yaml
+      }}
   become: true
   become_user: k3s-admin
+  environment: "{{ platform_kubectl_env }}"
   no_log: true
   when: monitoring_enabled | default(true) | bool
 
+- name: Render Argo CD manifests with kustomize
+  ansible.builtin.command:
+    argv:
+      - "{{ platform_kubectl }}"
+      - kustomize
+      - "{{ playbook_dir }}/../kubernetes/platform/argocd"
+  register: argocd_kustomize_manifest
+  changed_when: false
+
 - name: Install Argo CD via Kustomize
-  kubernetes.core.k8s:
-    state: present
-    kubeconfig: /home/k3s-admin/.kube/config
-    definition: "{{ lookup('kubernetes.core.kustomize', dir=playbook_dir + '/../kubernetes/platform/argocd') }}"
+  ansible.builtin.command:
+    argv:
+      - "{{ platform_kubectl }}"
+      - apply
+      - -f
+      - -
+  args:
+    stdin: "{{ argocd_kustomize_manifest.stdout }}"
   become: true
   become_user: k3s-admin
+  environment: "{{ platform_kubectl_env }}"
 
 - name: Build Argo CD GitOps repository credential from inline SSH key
   ansible.builtin.set_fact:
@@ -352,68 +403,95 @@
     - gitops_argocd_repository_secret_string_data is not defined
 
 - name: Apply Argo CD GitOps repository credentials
-  kubernetes.core.k8s:
-    state: present
-    kubeconfig: /home/k3s-admin/.kube/config
-    definition:
-      apiVersion: v1
-      kind: Secret
-      metadata:
-        name: platform-gitops-repository
-        namespace: argocd
-        labels:
-          argocd.argoproj.io/secret-type: repository
-      type: Opaque
-      stringData: "{{ gitops_argocd_repository_secret_string_data }}"
+  ansible.builtin.command:
+    argv:
+      - "{{ platform_kubectl }}"
+      - apply
+      - -f
+      - -
+  args:
+    stdin: >-
+      {{
+        {
+          'apiVersion': 'v1',
+          'kind': 'Secret',
+          'metadata': {
+            'name': 'platform-gitops-repository',
+            'namespace': 'argocd',
+            'labels': {
+              'argocd.argoproj.io/secret-type': 'repository'
+            }
+          },
+          'type': 'Opaque',
+          'stringData': gitops_argocd_repository_secret_string_data
+        } | to_nice_yaml
+      }}
   become: true
   become_user: k3s-admin
+  environment: "{{ platform_kubectl_env }}"
   no_log: true
   when: gitops_repo_private | default(false) | bool
 
 - name: Wait for Argo CD server to be available
-  kubernetes.core.k8s_info:
-    kind: Deployment
-    name: argocd-server
-    namespace: argocd
-    kubeconfig: /home/k3s-admin/.kube/config
+  ansible.builtin.command:
+    argv:
+      - "{{ platform_kubectl }}"
+      - wait
+      - --for=condition=available
+      - --timeout=300s
+      - deployment/argocd-server
+      - -n
+      - argocd
   become: true
   become_user: k3s-admin
-  register: argocd_deploy
-  until: argocd_deploy.resources[0].status.availableReplicas | default(0) > 0
-  retries: 30
-  delay: 10
+  environment: "{{ platform_kubectl_env }}"
+  changed_when: false
 
 - name: Apply GitOps AppProject
-  kubernetes.core.k8s:
-    state: present
-    kubeconfig: /home/k3s-admin/.kube/config
-    src: "{{ playbook_dir }}/../kubernetes/gitops/root/platform-project.yaml"
+  ansible.builtin.command:
+    argv:
+      - "{{ platform_kubectl }}"
+      - apply
+      - -f
+      - -
+  args:
+    stdin: "{{ lookup('ansible.builtin.file', playbook_dir + '/../kubernetes/gitops/root/platform-project.yaml') }}"
   become: true
   become_user: k3s-admin
+  environment: "{{ platform_kubectl_env }}"
 
 - name: Apply GitOps Applications
-  kubernetes.core.k8s:
-    state: present
-    kubeconfig: /home/k3s-admin/.kube/config
-    src: "{{ playbook_dir }}/../{{ item }}"
+  ansible.builtin.command:
+    argv:
+      - "{{ platform_kubectl }}"
+      - apply
+      - -f
+      - -
+  args:
+    stdin: "{{ lookup('ansible.builtin.file', playbook_dir + '/../' + item) }}"
   become: true
   become_user: k3s-admin
+  environment: "{{ platform_kubectl_env }}"
   loop:
     - kubernetes/gitops/apps/platform-applications.yaml
     - kubernetes/gitops/root/platform-root.application.yaml
 
 - name: Wait for root application to reconcile
-  kubernetes.core.k8s_info:
-    api_version: argoproj.io/v1alpha1
-    kind: Application
-    name: platform-root
-    namespace: argocd
-    kubeconfig: /home/k3s-admin/.kube/config
+  ansible.builtin.command:
+    argv:
+      - "{{ platform_kubectl }}"
+      - get
+      - application
+      - platform-root
+      - -n
+      - argocd
+      - -o
+      - "jsonpath={.status.sync.status} {.status.health.status}"
   become: true
   become_user: k3s-admin
+  environment: "{{ platform_kubectl_env }}"
   register: root_app
-  until: 
-    - root_app.resources[0].status.sync.status | default('') == 'Synced'
-    - root_app.resources[0].status.health.status | default('') == 'Healthy'
+  until: root_app.stdout | trim == 'Synced Healthy'
   retries: 90
   delay: 10
+  changed_when: false

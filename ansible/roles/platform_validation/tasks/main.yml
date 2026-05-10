@@ -1,21 +1,38 @@
+- name: Define kubectl execution context
+  ansible.builtin.set_fact:
+    platform_kubectl: /usr/local/bin/kubectl
+    platform_kubectl_env:
+      KUBECONFIG: /home/k3s-admin/.kube/config
+
 - name: Check Kubernetes API connectivity
-  kubernetes.core.k8s_info:
-    kind: Node
-    kubeconfig: /home/k3s-admin/.kube/config
+  ansible.builtin.command:
+    argv:
+      - "{{ platform_kubectl }}"
+      - get
+      - nodes
+      - -o
+      - name
   become: true
   become_user: k3s-admin
+  environment: "{{ platform_kubectl_env }}"
   register: cluster_nodes
-  failed_when: cluster_nodes.resources | length == 0
+  changed_when: false
+  failed_when: cluster_nodes.rc != 0 or (cluster_nodes.stdout_lines | default([]) | length == 0)
 
 - name: Check Argo application status
-  kubernetes.core.k8s_info:
-    api_version: argoproj.io/v1alpha1
-    kind: Application
-    name: "{{ item }}"
-    namespace: argocd
-    kubeconfig: /home/k3s-admin/.kube/config
+  ansible.builtin.command:
+    argv:
+      - "{{ platform_kubectl }}"
+      - get
+      - application
+      - "{{ item }}"
+      - -n
+      - argocd
+      - -o
+      - "jsonpath={.status.sync.status} {.status.health.status}"
   become: true
   become_user: k3s-admin
+  environment: "{{ platform_kubectl_env }}"
   loop:
     - platform-root
     - platform-cloudflare-tunnel
@@ -24,60 +41,71 @@
     - platform-wisemapping
     - platform-monitoring-prometheus
     - platform-monitoring-loki
-  register: app_info
+  register: app_status
+  changed_when: false
   failed_when: false
 
 - name: Fail if any Argo application is missing or unhealthy
   ansible.builtin.fail:
     msg: >-
       Argo application {{ item.item }} is not ready
-      (sync={{ (item.resources[0].status.sync.status if item.resources | length > 0 else 'missing') | default('unknown') }},
-      health={{ (item.resources[0].status.health.status if item.resources | length > 0 else 'missing') | default('unknown') }}).
-  loop: "{{ app_info.results }}"
-  when: >
-    (item.resources | length == 0) or
-    (item.resources[0].status.sync.status | default('') != 'Synced') or
-    (item.resources[0].status.health.status | default('') != 'Healthy')
+      (rc={{ item.rc }}, status={{ item.stdout | default('') | trim | default('missing', true) }},
+      stderr={{ item.stderr | default('') | trim | default('none', true) }}).
+  loop: "{{ app_status.results }}"
+  when: item.rc != 0 or item.stdout | default('') | trim != 'Synced Healthy'
 
 - name: Check Cloudflare tunnel deployment
-  kubernetes.core.k8s_info:
-    kind: Deployment
-    name: cloudflared
-    namespace: kube-system
-    kubeconfig: /home/k3s-admin/.kube/config
+  ansible.builtin.command:
+    argv:
+      - "{{ platform_kubectl }}"
+      - get
+      - deployment
+      - cloudflared
+      - -n
+      - kube-system
+      - -o
+      - "jsonpath={.status.availableReplicas}"
   become: true
   become_user: k3s-admin
+  environment: "{{ platform_kubectl_env }}"
   register: cf_deploy
-  failed_when: >
-    (cf_deploy.resources | length == 0) or
-    (cf_deploy.resources[0].status.availableReplicas | default(0) == 0)
+  changed_when: false
+  failed_when: cf_deploy.rc != 0 or (cf_deploy.stdout | default('0') | trim | int) == 0
 
 - name: Check Leantime backup CronJob
-  kubernetes.core.k8s_info:
-    kind: CronJob
-    name: leantime-db-backup
-    namespace: default
-    kubeconfig: /home/k3s-admin/.kube/config
+  ansible.builtin.command:
+    argv:
+      - "{{ platform_kubectl }}"
+      - get
+      - cronjob
+      - leantime-db-backup
+      - -n
+      - default
+      - -o
+      - name
   become: true
   become_user: k3s-admin
+  environment: "{{ platform_kubectl_env }}"
   register: backup_cron
-  failed_when: backup_cron.resources | length == 0
+  changed_when: false
+  failed_when: backup_cron.rc != 0 or backup_cron.stdout | default('') | trim | length == 0
 
 - name: Verify Leantime backup alert is reconciled
-  kubernetes.core.k8s_info:
-    api_version: monitoring.coreos.com/v1
-    kind: PrometheusRule
-    namespace: monitoring
-    kubeconfig: /home/k3s-admin/.kube/config
+  ansible.builtin.command:
+    argv:
+      - "{{ platform_kubectl }}"
+      - get
+      - prometheusrules.monitoring.coreos.com
+      - -n
+      - monitoring
+      - -o
+      - yaml
   become: true
   become_user: k3s-admin
+  environment: "{{ platform_kubectl_env }}"
   register: prometheus_rules
-  failed_when: >
-    monitoring_enabled | default(true) | bool and
-    (
-      (prometheus_rules.resources | length == 0) or
-      (not ((prometheus_rules.resources | to_json) is search('LeantimeBackupFailed')))
-    )
+  changed_when: false
+  failed_when: prometheus_rules.rc != 0 or not (prometheus_rules.stdout is search('LeantimeBackupFailed'))
   when: monitoring_enabled | default(true) | bool
 
 - name: Read Leantime backup validation timestamp
@@ -97,15 +125,14 @@
 - name: Trigger one-time Leantime backup Job
   ansible.builtin.command:
     argv:
-      - /usr/local/bin/kubectl
+      - "{{ platform_kubectl }}"
       - create
       - job
       - "{{ leantime_backup_validation_job_name }}"
       - --from=cronjob/leantime-db-backup
       - -n
       - default
-  environment:
-    KUBECONFIG: /home/k3s-admin/.kube/config
+  environment: "{{ platform_kubectl_env }}"
   become: true
   become_user: k3s-admin
   register: leantime_backup_validation_job
@@ -114,28 +141,31 @@
 - name: Wait for one-time Leantime backup Job to complete
   ansible.builtin.command:
     argv:
-      - /usr/local/bin/kubectl
+      - "{{ platform_kubectl }}"
       - wait
       - --for=condition=complete
       - --timeout=300s
       - "job/{{ leantime_backup_validation_job_name }}"
       - -n
       - default
-  environment:
-    KUBECONFIG: /home/k3s-admin/.kube/config
+  environment: "{{ platform_kubectl_env }}"
   become: true
   become_user: k3s-admin
   changed_when: false
 
 - name: Create Leantime backup artifact validator pod
-  kubernetes.core.k8s:
-    state: present
-    kubeconfig: /home/k3s-admin/.kube/config
-    definition:
+  ansible.builtin.command:
+    argv:
+      - "{{ platform_kubectl }}"
+      - apply
+      - -f
+      - -
+  args:
+    stdin: |
       apiVersion: v1
       kind: Pod
       metadata:
-        name: "{{ leantime_backup_validator_pod_name }}"
+        name: {{ leantime_backup_validator_pod_name }}
         namespace: default
       spec:
         restartPolicy: Never
@@ -163,33 +193,38 @@
               claimName: leantime-backup-pvc
   become: true
   become_user: k3s-admin
+  environment: "{{ platform_kubectl_env }}"
 
 - name: Wait for Leantime backup artifact validator pod
-  kubernetes.core.k8s_info:
-    kind: Pod
-    name: "{{ leantime_backup_validator_pod_name }}"
-    namespace: default
-    kubeconfig: /home/k3s-admin/.kube/config
+  ansible.builtin.command:
+    argv:
+      - "{{ platform_kubectl }}"
+      - get
+      - pod
+      - "{{ leantime_backup_validator_pod_name }}"
+      - -n
+      - default
+      - -o
+      - "jsonpath={.status.phase}"
   become: true
   become_user: k3s-admin
+  environment: "{{ platform_kubectl_env }}"
   register: leantime_backup_validator_pod
-  until: >
-    leantime_backup_validator_pod.resources | length > 0 and
-    leantime_backup_validator_pod.resources[0].status.phase | default('') in ['Succeeded', 'Failed']
+  until: leantime_backup_validator_pod.stdout | default('') | trim in ['Succeeded', 'Failed']
   retries: 60
   delay: 5
+  changed_when: false
   failed_when: false
 
 - name: Read Leantime backup artifact validation log
   ansible.builtin.command:
     argv:
-      - /usr/local/bin/kubectl
+      - "{{ platform_kubectl }}"
       - logs
       - "pod/{{ leantime_backup_validator_pod_name }}"
       - -n
       - default
-  environment:
-    KUBECONFIG: /home/k3s-admin/.kube/config
+  environment: "{{ platform_kubectl_env }}"
   become: true
   become_user: k3s-admin
   register: leantime_backup_validator_log
@@ -200,23 +235,25 @@
   ansible.builtin.fail:
     msg: >-
       Leantime backup artifact validation failed
-      (phase={{ leantime_backup_validator_pod.resources[0].status.phase | default('unknown') }}):
+      (phase={{ leantime_backup_validator_pod.stdout | default('') | trim | default('unknown', true) }}):
       {{ leantime_backup_validator_log.stdout | default(leantime_backup_validator_log.stderr) }}
-  when: >
-    (leantime_backup_validator_pod.resources | length == 0) or
-    (leantime_backup_validator_pod.resources[0].status.phase | default('') != 'Succeeded')
+  when: leantime_backup_validator_pod.rc != 0 or leantime_backup_validator_pod.stdout | default('') | trim != 'Succeeded'
 
 - name: Report Leantime backup artifact validation evidence
   ansible.builtin.debug:
     msg: "{{ leantime_backup_validator_log.stdout }}"
 
 - name: Remove Leantime backup artifact validator pod
-  kubernetes.core.k8s:
-    state: absent
-    kind: Pod
-    name: "{{ leantime_backup_validator_pod_name }}"
-    namespace: default
-    kubeconfig: /home/k3s-admin/.kube/config
+  ansible.builtin.command:
+    argv:
+      - "{{ platform_kubectl }}"
+      - delete
+      - pod
+      - "{{ leantime_backup_validator_pod_name }}"
+      - -n
+      - default
+      - --ignore-not-found=true
+  environment: "{{ platform_kubectl_env }}"
   become: true
   become_user: k3s-admin
 
