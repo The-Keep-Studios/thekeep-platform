@@ -277,10 +277,23 @@ Migration safety:
 - Apply auth and email secret changes with the production playbook:
   `ansible-playbook -i ansible/inventory.production.ini ansible/setup_k3s_production.yml`
 
+## Leantime Email
+
+Leantime SMTP settings live in ignored `ansible/production_vars.yml` under `platform_email.leantime`. The playbook creates the `leantime-email` Kubernetes Secret and restarts Leantime only when the SMTP settings change.
+
+Google Workspace options:
+- Quick setup: use `smtp.gmail.com`, port `587`, `STARTTLS`, a dedicated Workspace mailbox, and an app password.
+- Preferred app relay setup: configure Google Workspace SMTP relay, then use `smtp-relay.gmail.com`, port `587`, and TLS. If the relay authenticates by allowed sender IP, set `smtp_auth: false`.
+
+After editing `ansible/production_vars.yml`, apply with:
+```bash
+ansible-playbook -K -i ansible/inventory.production.ini ansible/setup_k3s_production.yml
+```
+
 TODO:
 - Automate Authentik application/provider setup for bundled apps instead of requiring manual UI setup.
 - Generate or reconcile Leantime OIDC client credentials and write them into the `leantime-oidc` secret.
-- Generate or reconcile SMTP/email settings needed for Leantime invitations and password reset flows.
+- Validate Leantime SMTP delivery with a real invitation/password-reset smoke test after SMTP credentials are configured.
 - Keep the automation suitable for open-source reuse by documenting required domain names, redirect URLs, and any secrets that must remain operator-provided.
 
 Authentik bootstrap behavior:

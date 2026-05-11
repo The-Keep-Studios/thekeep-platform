@@ -90,6 +90,61 @@
       become: false
       tags: [always]
 
+    - name: Define required Leantime SMTP settings
+      ansible.builtin.set_fact:
+        required_leantime_smtp_keys: >-
+          {{
+            ['return', 'smtp_hosts', 'smtp_port'] +
+            (((platform_email.leantime.smtp_auth | default(true)) | bool) |
+            ternary(['smtp_username', 'smtp_password'], []))
+          }}
+      when: platform_email.leantime.use_smtp | default(false) | bool
+      tags: [always]
+
+    - name: Detect missing required Leantime SMTP settings
+      ansible.builtin.set_fact:
+        missing_leantime_smtp_keys: >-
+          {{
+            required_leantime_smtp_keys |
+            difference((platform_email.leantime | default({})).keys() | list)
+          }}
+      when: platform_email.leantime.use_smtp | default(false) | bool
+      tags: [always]
+
+    - name: Fail if required Leantime SMTP settings are missing
+      ansible.builtin.fail:
+        msg: "platform_email.leantime is missing required SMTP settings: {{ missing_leantime_smtp_keys | join(', ') }}"
+      when:
+        - platform_email.leantime.use_smtp | default(false) | bool
+        - missing_leantime_smtp_keys | default([]) | length > 0
+      tags: [always]
+
+    - name: Fail if required Leantime SMTP settings are empty or placeholders
+      ansible.builtin.fail:
+        msg: "platform_email.leantime.{{ item }} is empty or still set to a placeholder value."
+      vars:
+        smtp_value: "{{ platform_email.leantime[item] | default('') | string }}"
+        normalized_smtp_value: "{{ smtp_value | trim | lower }}"
+      loop: "{{ required_leantime_smtp_keys | default([]) }}"
+      when: >
+        (platform_email.leantime.use_smtp | default(false) | bool) and
+        (
+          (smtp_value | trim | length == 0) or
+          (normalized_smtp_value in production_placeholder_values) or
+          (normalized_smtp_value is match('^(change[_-]?me|replace[_-]?me|todo|example|your[_ -]?value|your[_ -]?secret)'))
+        )
+      tags: [always]
+
+    - name: Fail if Leantime SMTP port is not numeric
+      ansible.builtin.fail:
+        msg: "platform_email.leantime.smtp_port must be a numeric port."
+      vars:
+        leantime_smtp_port: "{{ platform_email.leantime.smtp_port | default('') | string | trim }}"
+      when:
+        - platform_email.leantime.use_smtp | default(false) | bool
+        - not (leantime_smtp_port is match('^[0-9]+$'))
+      tags: [always]
+
     - name: Fail if direct origin URLs are missing while external HTTPS is required
       ansible.builtin.fail:
         msg: "direct_http_urls must be configured when require_external_https is true."

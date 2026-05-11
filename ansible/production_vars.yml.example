@@ -41,15 +41,21 @@ platform_secrets:
 #     disable_login_form: false
 
 # Optional: enable SMTP for Leantime invitations and password reset emails.
+# Google Workspace quick path: use smtp.gmail.com with a dedicated Workspace
+# mailbox and an app password.
 # platform_email:
 #   leantime:
 #     return: "Leantime <noreply@thekeepstudios.com>"
 #     use_smtp: true
-#     smtp_hosts: "smtp.example.com"
+#     smtp_hosts: "smtp.gmail.com"
 #     smtp_auth: true
-#     smtp_username: "smtp-user"
-#     smtp_password: "CHANGE_ME"
+#     smtp_username: "noreply@thekeepstudios.com"
+#     smtp_password: "CHANGE_ME_APP_PASSWORD"
 #     smtp_auto_tls: true
 #     smtp_secure: "STARTTLS"
 #     smtp_ssl_noverify: false
 #     smtp_port: "587"
+#
+# Google Workspace SMTP relay alternative: configure SMTP relay in Google Admin,
+# then use smtp-relay.gmail.com. If the relay authenticates by allowed sender IP
+# instead of SMTP auth, set smtp_auth: false and omit username/password.
