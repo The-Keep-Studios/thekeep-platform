@@ -23,6 +23,20 @@ platform_secrets:
 # gitops_repo_username: "CHANGE_ME"
 # gitops_repo_password: "CHANGE_ME"
 
+# Optional: enable Leantime login through an Authentik OAuth2/OpenID provider.
+# Create the Authentik application/provider first, then copy the generated
+# client ID and client secret here.
+# platform_oidc:
+#   leantime:
+#     enable: true
+#     client_id: "CHANGE_ME"
+#     client_secret: "CHANGE_ME"
+#     provider_url: "https://auth.thekeepstudios.com/application/o/leantime/"
+#     create_user: true
+#     default_role: 20
+#     scopes: "openid,profile,email"
+#     disable_login_form: false
+
 # Optional: enable SMTP for Leantime invitations and password reset emails.
 # platform_email:
 #   leantime:

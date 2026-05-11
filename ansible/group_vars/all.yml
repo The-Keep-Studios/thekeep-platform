@@ -53,6 +53,14 @@ platform_email:
   leantime:
     use_smtp: false
 
+platform_validation_argo_app_status_retries: 60
+platform_validation_argo_app_status_delay: 10
+platform_validation_argo_app_allowed_statuses:
+  platform-monitoring-loki:
+    # Argo CD currently reports the Loki StatefulSet OutOfSync while
+    # `argocd app diff --core` returns no diff and the workload is healthy.
+    - OutOfSync Healthy
+
 monitoring_enabled: true
 require_external_https: true
 direct_http_urls: []

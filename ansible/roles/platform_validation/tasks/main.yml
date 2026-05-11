@@ -3,6 +3,8 @@
     platform_kubectl: /usr/local/bin/kubectl
     platform_kubectl_env:
       KUBECONFIG: /home/k3s-admin/.kube/config
+    platform_validation_default_argo_app_statuses:
+      - Synced Healthy
 
 - name: Check Kubernetes API connectivity
   ansible.builtin.command:
@@ -42,6 +44,15 @@
     - platform-monitoring-prometheus
     - platform-monitoring-loki
   register: app_status
+  until: >
+    app_status.rc == 0 and
+    (app_status.stdout | default('') | trim) in
+    (
+      platform_validation_default_argo_app_statuses +
+      (platform_validation_argo_app_allowed_statuses[item] | default([]))
+    )
+  retries: "{{ platform_validation_argo_app_status_retries | default(60) }}"
+  delay: "{{ platform_validation_argo_app_status_delay | default(10) }}"
   changed_when: false
   failed_when: false
 
@@ -50,9 +61,16 @@
     msg: >-
       Argo application {{ item.item }} is not ready
       (rc={{ item.rc }}, status={{ item.stdout | default('') | trim | default('missing', true) }},
+      expected={{ (platform_validation_default_argo_app_statuses + (platform_validation_argo_app_allowed_statuses[item.item] | default([]))) | join(' or ') }},
       stderr={{ item.stderr | default('') | trim | default('none', true) }}).
   loop: "{{ app_status.results }}"
-  when: item.rc != 0 or item.stdout | default('') | trim != 'Synced Healthy'
+  when: >
+    item.rc != 0 or
+    (item.stdout | default('') | trim) not in
+    (
+      platform_validation_default_argo_app_statuses +
+      (platform_validation_argo_app_allowed_statuses[item.item] | default([]))
+    )
 
 - name: Check Cloudflare tunnel deployment
   ansible.builtin.command:
