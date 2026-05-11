@@ -15,6 +15,9 @@ platform_secrets:
   cloudflare_tunnel_token: "CHANGE_ME"
   grafana_admin_user: "admin"
   grafana_admin_password: "CHANGE_ME"
+  # Optional: defaults to grafana_admin_user/grafana_admin_password when omitted.
+  monitoring_basic_auth_user: "admin"
+  monitoring_basic_auth_password: "CHANGE_ME"
 
 # Optional: enable these only when gitops_repo_private is true.
 # gitops_repo_ssh_private_key_path: "/path/to/argocd-readonly-key"
@@ -22,3 +25,31 @@ platform_secrets:
 #   CHANGE_ME
 # gitops_repo_username: "CHANGE_ME"
 # gitops_repo_password: "CHANGE_ME"
+
+# Optional: enable Leantime login through an Authentik OAuth2/OpenID provider.
+# Create the Authentik application/provider first, then copy the generated
+# client ID and client secret here.
+# platform_oidc:
+#   leantime:
+#     enable: true
+#     client_id: "CHANGE_ME"
+#     client_secret: "CHANGE_ME"
+#     provider_url: "https://auth.thekeepstudios.com/application/o/leantime/"
+#     create_user: true
+#     default_role: 20
+#     scopes: "openid,profile,email"
+#     disable_login_form: false
+
+# Optional: enable SMTP for Leantime invitations and password reset emails.
+# platform_email:
+#   leantime:
+#     return: "Leantime <noreply@thekeepstudios.com>"
+#     use_smtp: true
+#     smtp_hosts: "smtp.example.com"
+#     smtp_auth: true
+#     smtp_username: "smtp-user"
+#     smtp_password: "CHANGE_ME"
+#     smtp_auto_tls: true
+#     smtp_secure: "STARTTLS"
+#     smtp_ssl_noverify: false
+#     smtp_port: "587"

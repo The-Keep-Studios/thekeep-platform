@@ -261,7 +261,7 @@
             'name': item.name,
             'namespace': item.namespace
           },
-          'type': 'Opaque',
+          'type': item.type | default('Opaque'),
           'stringData': item.data
         } | to_nice_yaml
       }}
@@ -293,6 +293,19 @@
         LEAN_OIDC_DEFAULT_ROLE: "{{ platform_oidc.leantime.default_role | default(20) | string }}"
         LEAN_OIDC_SCOPES: "{{ platform_oidc.leantime.scopes | default('openid,profile,email') }}"
         LEAN_DISABLE_LOGIN_FORM: "{{ platform_oidc.leantime.disable_login_form | default(false) | string }}"
+    - name: leantime-email
+      namespace: default
+      data:
+        LEAN_EMAIL_RETURN: "{{ platform_email.leantime.return | default('') }}"
+        LEAN_EMAIL_USE_SMTP: "{{ platform_email.leantime.use_smtp | default(false) | string }}"
+        LEAN_EMAIL_SMTP_HOSTS: "{{ platform_email.leantime.smtp_hosts | default('') }}"
+        LEAN_EMAIL_SMTP_AUTH: "{{ platform_email.leantime.smtp_auth | default(true) | string }}"
+        LEAN_EMAIL_SMTP_USERNAME: "{{ platform_email.leantime.smtp_username | default('') }}"
+        LEAN_EMAIL_SMTP_PASSWORD: "{{ platform_email.leantime.smtp_password | default('') }}"
+        LEAN_EMAIL_SMTP_AUTO_TLS: "{{ platform_email.leantime.smtp_auto_tls | default(true) | string }}"
+        LEAN_EMAIL_SMTP_SECURE: "{{ platform_email.leantime.smtp_secure | default('') }}"
+        LEAN_EMAIL_SMTP_SSLNOVERIFY: "{{ platform_email.leantime.smtp_ssl_noverify | default(false) | string }}"
+        LEAN_EMAIL_SMTP_PORT: "{{ platform_email.leantime.smtp_port | default('') }}"
     - name: wisemapping-secrets
       namespace: wisemapping
       data:
@@ -303,6 +316,12 @@
         OAUTH_GOOGLE_CLIENT_ID: "{{ platform_oidc.wisemapping.google_client_id | default('') }}"
         OAUTH_GOOGLE_CLIENT_SECRET: "{{ platform_oidc.wisemapping.google_client_secret | default('') }}"
         OAUTH_GOOGLE_ISSUER_URI: "{{ platform_oidc.wisemapping.google_issuer_uri | default('') }}"
+    - name: monitoring-basic-auth
+      namespace: monitoring
+      type: kubernetes.io/basic-auth
+      data:
+        username: "{{ platform_secrets.monitoring_basic_auth_user | default(platform_secrets.grafana_admin_user) }}"
+        password: "{{ platform_secrets.monitoring_basic_auth_password | default(platform_secrets.grafana_admin_password) }}"
     - name: cloudflare-tunnel-token
       namespace: kube-system
       data:
@@ -352,6 +371,8 @@
     argv:
       - "{{ platform_kubectl }}"
       - apply
+      - "--server-side"
+      - "--force-conflicts"
       - -f
       - "-"
   args:

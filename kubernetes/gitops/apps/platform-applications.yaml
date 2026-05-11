@@ -103,6 +103,9 @@ spec:
   - repoURL: "https://github.com/The-Keep-Studios/thekeep-platform.git"
     targetRevision: "main"
     ref: values
+  - repoURL: "https://github.com/The-Keep-Studios/thekeep-platform.git"
+    targetRevision: "main"
+    path: kubernetes/platform/monitoring/access
   destination:
     server: https://kubernetes.default.svc
     namespace: monitoring

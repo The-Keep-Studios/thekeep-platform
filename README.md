@@ -120,6 +120,9 @@ The public HTTPS endpoints checked by the launch gate are:
 - `alerts.thekeepstudios.com`
 - `argocd.thekeepstudios.com`
 
+Prometheus and Alertmanager are protected with Traefik BasicAuth until the TODO below automates Authentik providers for bundled platform apps.
+The direct HTTP origin check allows an empty connection, curl `000`, or Traefik's default `404`; it fails if the LAN origin serves an application over plain HTTP.
+
 For manual Argo inspection:
 ```bash
 sudo -u k3s-admin -H env KUBECONFIG=/home/k3s-admin/.kube/config kubectl get applications -n argocd
@@ -135,6 +138,68 @@ Live evidence required before claiming GO:
 - direct-origin block results, where any HTTP response is a failure;
 - in-cluster `PrometheusRule` containing `LeantimeBackupFailed`;
 - Leantime backup Job and readable non-empty backup artifact verification.
+
+### Ops Tips
+
+Run cluster inspection commands as `k3s-admin` on the production host. This keeps day-to-day cluster access out of the personal user account while still avoiding root-owned Kubernetes workflows:
+
+```bash
+kubectl get nodes
+```
+
+If you are not already in a `k3s-admin` shell, prefix the command with:
+
+```bash
+sudo -u k3s-admin -H env KUBECONFIG=/home/k3s-admin/.kube/config
+```
+
+When the production playbook is waiting for Argo CD reconciliation, inspect the GitOps applications from another terminal:
+
+```bash
+kubectl get applications -n argocd
+kubectl get applications -n argocd \
+  -o custom-columns=NAME:.metadata.name,SYNC:.status.sync.status,HEALTH:.status.health.status,REVISION:.status.sync.revision
+```
+
+Describe the root app or any child app that is not fully synced and healthy:
+
+```bash
+kubectl describe application platform-root -n argocd
+kubectl describe application platform-monitoring-loki -n argocd
+kubectl get application platform-monitoring-loki -n argocd \
+  -o jsonpath='{range .status.resources[?(@.status=="OutOfSync")]}{.kind}{" "}{.namespace}{" "}{.name}{"\n"}{end}'
+kubectl exec -n argocd statefulset/argocd-application-controller -- \
+  sh -lc 'argocd app diff platform-monitoring-loki --core; echo exit=$?'
+```
+
+Check pods and recent cluster events when an app is `Progressing` or `OutOfSync`:
+
+```bash
+kubectl get pods -A
+kubectl get events -A --sort-by=.lastTimestamp
+```
+
+Useful Argo CD controller logs:
+
+```bash
+kubectl logs -n argocd deployment/argocd-repo-server --tail=100
+kubectl logs -n argocd statefulset/argocd-application-controller --tail=100
+```
+
+Force Argo CD to recompare an app after a live investigation or manual test:
+
+```bash
+kubectl annotate application platform-monitoring-loki -n argocd \
+  argocd.argoproj.io/refresh=hard --overwrite
+kubectl annotate application platform-root -n argocd \
+  argocd.argoproj.io/refresh=hard --overwrite
+```
+
+Argo status hints:
+- `Synced` + `Healthy`: desired state is applied and healthy.
+- `Synced` + `Progressing`: manifests applied, but workload readiness is still settling.
+- `OutOfSync` + `Healthy`: live resources differ from Git; inspect `kubectl describe application ...` before changing anything.
+- `Missing` or `Degraded`: treat as a blocker and inspect the app description, pods, and events.
 
 ### App Developers: Architecture You Deploy On
 
@@ -207,10 +272,16 @@ Migration safety:
   - Wisemapping: `https://mindmaps.thekeepstudios.com/login/oauth2/code/google`
 - Issuer format:
   - `https://auth.thekeepstudios.com/application/o/<provider-slug>/`
-- Apply auth changes without full redeploy:
-```bash
-bash scripts/reconcile-oidc.sh
-```
+- Set Leantime OIDC values in ignored `ansible/production_vars.yml` under `platform_oidc.leantime`.
+- Set Leantime SMTP values in ignored `ansible/production_vars.yml` under `platform_email.leantime`.
+- Apply auth and email secret changes with the production playbook:
+  `ansible-playbook -i ansible/inventory.production.ini ansible/setup_k3s_production.yml`
+
+TODO:
+- Automate Authentik application/provider setup for bundled apps instead of requiring manual UI setup.
+- Generate or reconcile Leantime OIDC client credentials and write them into the `leantime-oidc` secret.
+- Generate or reconcile SMTP/email settings needed for Leantime invitations and password reset flows.
+- Keep the automation suitable for open-source reuse by documenting required domain names, redirect URLs, and any secrets that must remain operator-provided.
 
 Authentik bootstrap behavior:
 - `AUTHENTIK_BOOTSTRAP_PASSWORD` is only read on first startup with a fresh Authentik DB.
