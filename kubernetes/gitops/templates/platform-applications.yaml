@@ -103,6 +103,9 @@ spec:
   - repoURL: "{{ gitops_repo_url }}"
     targetRevision: "{{ gitops_revision }}"
     ref: values
+  - repoURL: "{{ gitops_repo_url }}"
+    targetRevision: "{{ gitops_revision }}"
+    path: kubernetes/platform/monitoring/access
   destination:
     server: https://kubernetes.default.svc
     namespace: monitoring

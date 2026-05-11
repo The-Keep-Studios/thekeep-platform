@@ -120,6 +120,8 @@ The public HTTPS endpoints checked by the launch gate are:
 - `alerts.thekeepstudios.com`
 - `argocd.thekeepstudios.com`
 
+Prometheus and Alertmanager are protected with Traefik BasicAuth until the TODO below automates Authentik providers for bundled platform apps.
+
 For manual Argo inspection:
 ```bash
 sudo -u k3s-admin -H env KUBECONFIG=/home/k3s-admin/.kube/config kubectl get applications -n argocd

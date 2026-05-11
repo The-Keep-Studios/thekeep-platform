@@ -15,6 +15,9 @@ platform_secrets:
   cloudflare_tunnel_token: "CHANGE_ME"
   grafana_admin_user: "admin"
   grafana_admin_password: "CHANGE_ME"
+  # Optional: defaults to grafana_admin_user/grafana_admin_password when omitted.
+  monitoring_basic_auth_user: "admin"
+  monitoring_basic_auth_password: "CHANGE_ME"
 
 # Optional: enable these only when gitops_repo_private is true.
 # gitops_repo_ssh_private_key_path: "/path/to/argocd-readonly-key"

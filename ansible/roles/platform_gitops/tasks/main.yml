@@ -261,7 +261,7 @@
             'name': item.name,
             'namespace': item.namespace
           },
-          'type': 'Opaque',
+          'type': item.type | default('Opaque'),
           'stringData': item.data
         } | to_nice_yaml
       }}
@@ -316,6 +316,12 @@
         OAUTH_GOOGLE_CLIENT_ID: "{{ platform_oidc.wisemapping.google_client_id | default('') }}"
         OAUTH_GOOGLE_CLIENT_SECRET: "{{ platform_oidc.wisemapping.google_client_secret | default('') }}"
         OAUTH_GOOGLE_ISSUER_URI: "{{ platform_oidc.wisemapping.google_issuer_uri | default('') }}"
+    - name: monitoring-basic-auth
+      namespace: monitoring
+      type: kubernetes.io/basic-auth
+      data:
+        username: "{{ platform_secrets.monitoring_basic_auth_user | default(platform_secrets.grafana_admin_user) }}"
+        password: "{{ platform_secrets.monitoring_basic_auth_password | default(platform_secrets.grafana_admin_password) }}"
     - name: cloudflare-tunnel-token
       namespace: kube-system
       data:
