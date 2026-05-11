@@ -121,6 +121,7 @@ The public HTTPS endpoints checked by the launch gate are:
 - `argocd.thekeepstudios.com`
 
 Prometheus and Alertmanager are protected with Traefik BasicAuth until the TODO below automates Authentik providers for bundled platform apps.
+The direct HTTP origin check allows an empty connection, curl `000`, or Traefik's default `404`; it fails if the LAN origin serves an application over plain HTTP.
 
 For manual Argo inspection:
 ```bash

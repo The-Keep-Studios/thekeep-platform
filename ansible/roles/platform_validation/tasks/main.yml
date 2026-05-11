@@ -320,19 +320,19 @@
       - -w
       - "%{http_code}"
       - "{{ item }}"
-  loop: "{{ direct_http_urls | default([]) }}"
+  loop: "{{ direct_http_urls | default([]) | select('string') | map('trim') | reject('equalto', '') | list }}"
   register: direct_http_origin_probes
   changed_when: false
   failed_when: false
   when: require_external_https | default(true) | bool
 
-- name: Fail if any direct HTTP origin answers
+- name: Fail if any direct HTTP origin exposes an application
   ansible.builtin.fail:
-    msg: "Direct HTTP origin answered and must be blocked: {{ item.item }} (HTTP {{ item.stdout | trim }})."
+    msg: "Direct HTTP origin exposes an application: {{ item.item }} (HTTP {{ item.stdout | trim }})."
   loop: "{{ direct_http_origin_probes.results | default([]) }}"
   when:
     - require_external_https | default(true) | bool
-    - (item.stdout | default('') | trim) not in ['', '000']
+    - (item.stdout | default('') | trim) not in ['', '000', '404']
 
 - name: Report direct HTTP origin block evidence
   ansible.builtin.debug:
