@@ -145,6 +145,16 @@
         - not (leantime_smtp_port is match('^[0-9]+$'))
       tags: [always]
 
+    - name: Fail if Leantime SMTP return address includes a display name
+      ansible.builtin.fail:
+        msg: "platform_email.leantime.return must be a plain email address, not a display-name value like 'Leantime <noreply@example.com>'."
+      vars:
+        leantime_email_return: "{{ platform_email.leantime.return | default('') | string | trim }}"
+      when:
+        - platform_email.leantime.use_smtp | default(false) | bool
+        - leantime_email_return is search('[<>]')
+      tags: [always]
+
     - name: Fail if direct origin URLs are missing while external HTTPS is required
       ansible.builtin.fail:
         msg: "direct_http_urls must be configured when require_external_https is true."

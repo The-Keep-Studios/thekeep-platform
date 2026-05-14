@@ -45,7 +45,7 @@ platform_secrets:
 # then copy the domain's SMTP credentials here.
 # platform_email:
 #   leantime:
-#     return: "Leantime <noreply@mg.thekeepstudios.com>"
+#     return: "noreply@mg.thekeepstudios.com"
 #     use_smtp: true
 #     smtp_hosts: "smtp.mailgun.org"
 #     smtp_auth: true

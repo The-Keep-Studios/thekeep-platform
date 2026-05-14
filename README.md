@@ -285,7 +285,7 @@ For production transactional mail, use Mailgun SMTP. Mailgun's Free plan current
 
 Recommended shape:
 - Mailgun sending domain: `mg.thekeepstudios.com`
-- Leantime sender: `Leantime <noreply@mg.thekeepstudios.com>`
+- Leantime return address: `noreply@mg.thekeepstudios.com`
 - SMTP host: `smtp.mailgun.org`
 - SMTP port/security: `587` with `STARTTLS`
 - SMTP username: Mailgun domain SMTP login, commonly `postmaster@mg.thekeepstudios.com`
