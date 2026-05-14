@@ -52,6 +52,6 @@ platform_secrets:
 #     smtp_username: "postmaster@mg.thekeepstudios.com"
 #     smtp_password: "CHANGE_ME_MAILGUN_SMTP_PASSWORD"
 #     smtp_auto_tls: true
-#     smtp_secure: "STARTTLS"
+#     smtp_secure: "tls"
 #     smtp_ssl_noverify: false
 #     smtp_port: "587"

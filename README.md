@@ -287,7 +287,7 @@ Recommended shape:
 - Mailgun sending domain: `mg.thekeepstudios.com`
 - Leantime return address: `noreply@mg.thekeepstudios.com`
 - SMTP host: `smtp.mailgun.org`
-- SMTP port/security: `587` with `STARTTLS`
+- SMTP port/security: `587` with `tls`/STARTTLS
 - SMTP username: Mailgun domain SMTP login, commonly `postmaster@mg.thekeepstudios.com`
 
 Use `smtp.eu.mailgun.org` instead if the Mailgun sending domain is created in the EU region.

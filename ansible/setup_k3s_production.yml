@@ -155,6 +155,16 @@
         - leantime_email_return is search('[<>]')
       tags: [always]
 
+    - name: Fail if Leantime SMTP secure mode is unsupported
+      ansible.builtin.fail:
+        msg: "platform_email.leantime.smtp_secure must be empty, tls, ssl, or STARTTLS."
+      vars:
+        leantime_smtp_secure: "{{ platform_email.leantime.smtp_secure | default('') | string | trim | lower }}"
+      when:
+        - platform_email.leantime.use_smtp | default(false) | bool
+        - leantime_smtp_secure not in ['', 'tls', 'ssl', 'starttls']
+      tags: [always]
+
     - name: Fail if direct origin URLs are missing while external HTTPS is required
       ansible.builtin.fail:
         msg: "direct_http_urls must be configured when require_external_https is true."
