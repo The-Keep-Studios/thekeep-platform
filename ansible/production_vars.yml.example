@@ -41,17 +41,16 @@ platform_secrets:
 #     disable_login_form: false
 
 # Optional: enable real SMTP delivery for Leantime invitations and password
-# reset emails. For a self-hosted setup, point this at an authenticated SMTP
-# submission relay running on a mail host with static IP, PTR/rDNS, SPF, DKIM,
-# and DMARC configured.
+# reset emails through Mailgun. Create and verify a Mailgun sending domain first,
+# then copy the domain's SMTP credentials here.
 # platform_email:
 #   leantime:
-#     return: "Leantime <noreply@notify.thekeepstudios.com>"
+#     return: "Leantime <noreply@mg.thekeepstudios.com>"
 #     use_smtp: true
-#     smtp_hosts: "mail.thekeepstudios.com"
+#     smtp_hosts: "smtp.mailgun.org"
 #     smtp_auth: true
-#     smtp_username: "leantime@notify.thekeepstudios.com"
-#     smtp_password: "CHANGE_ME_SMTP_SUBMISSION_PASSWORD"
+#     smtp_username: "postmaster@mg.thekeepstudios.com"
+#     smtp_password: "CHANGE_ME_MAILGUN_SMTP_PASSWORD"
 #     smtp_auto_tls: true
 #     smtp_secure: "STARTTLS"
 #     smtp_ssl_noverify: false
