@@ -40,20 +40,19 @@ platform_secrets:
 #     scopes: "openid,profile,email"
 #     disable_login_form: false
 
-# Optional: enable internal SMTP capture for Leantime invitations and password
-# reset emails. This sends Leantime mail to the in-cluster Mailpit service, so
-# messages are self-hosted and retrievable through the Mailpit web UI.
+# Optional: enable real SMTP delivery for Leantime invitations and password
+# reset emails. For a self-hosted setup, point this at an authenticated SMTP
+# submission relay running on a mail host with static IP, PTR/rDNS, SPF, DKIM,
+# and DMARC configured.
 # platform_email:
 #   leantime:
-#     return: "Leantime <noreply@thekeepstudios.com>"
+#     return: "Leantime <noreply@notify.thekeepstudios.com>"
 #     use_smtp: true
-#     smtp_hosts: "leantime-mailpit.default.svc.cluster.local"
-#     smtp_auth: false
-#     smtp_auto_tls: false
-#     smtp_secure: ""
+#     smtp_hosts: "mail.thekeepstudios.com"
+#     smtp_auth: true
+#     smtp_username: "leantime@notify.thekeepstudios.com"
+#     smtp_password: "CHANGE_ME_SMTP_SUBMISSION_PASSWORD"
+#     smtp_auto_tls: true
+#     smtp_secure: "STARTTLS"
 #     smtp_ssl_noverify: false
-#     smtp_port: "1025"
-#
-# Real outbound self-hosted email is a separate step. Use a dedicated mail host
-# with static IP, matching reverse DNS, SPF, DKIM, and DMARC before sending to
-# public inbox providers.
+#     smtp_port: "587"
