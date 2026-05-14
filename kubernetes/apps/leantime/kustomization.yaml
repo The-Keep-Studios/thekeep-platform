@@ -3,3 +3,4 @@ kind: Kustomization
 resources:
 - production.yaml
 - backup-cronjob.yaml
+- mailpit.yaml

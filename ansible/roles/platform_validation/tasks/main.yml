@@ -108,6 +108,24 @@
   changed_when: false
   failed_when: backup_cron.rc != 0 or backup_cron.stdout | default('') | trim | length == 0
 
+- name: Check Leantime internal Mailpit deployment
+  ansible.builtin.command:
+    argv:
+      - "{{ platform_kubectl }}"
+      - wait
+      - --for=condition=available
+      - --timeout=180s
+      - deployment/leantime-mailpit
+      - -n
+      - default
+  become: true
+  become_user: k3s-admin
+  environment: "{{ platform_kubectl_env }}"
+  changed_when: false
+  when:
+    - platform_email.leantime.use_smtp | default(false) | bool
+    - "'leantime-mailpit' in (platform_email.leantime.smtp_hosts | default(''))"
+
 - name: Verify Leantime backup alert is reconciled
   ansible.builtin.command:
     argv:

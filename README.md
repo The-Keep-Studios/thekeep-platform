@@ -281,9 +281,16 @@ Migration safety:
 
 Leantime SMTP settings live in ignored `ansible/production_vars.yml` under `platform_email.leantime`. The playbook creates the `leantime-email` Kubernetes Secret and restarts Leantime only when the SMTP settings change.
 
-Google Workspace options:
-- Quick setup: use `smtp.gmail.com`, port `587`, `STARTTLS`, a dedicated Workspace mailbox, and an app password.
-- Preferred app relay setup: configure Google Workspace SMTP relay, then use `smtp-relay.gmail.com`, port `587`, and TLS. If the relay authenticates by allowed sender IP, set `smtp_auth: false`.
+The default self-hosted path is an internal Mailpit SMTP capture service. It avoids Google SMTP entirely and keeps transactional messages inside the cluster. Configure Leantime to send to `leantime-mailpit.default.svc.cluster.local:1025` with SMTP auth and TLS disabled, then read messages through a port-forward:
+
+```bash
+sudo -u k3s-admin -H env KUBECONFIG=/home/k3s-admin/.kube/config \
+kubectl -n default port-forward svc/leantime-mailpit 8025:8025
+```
+
+Open `http://127.0.0.1:8025` on the machine running the port-forward.
+
+For real outbound self-hosted email, use a dedicated mail host with static IP, matching reverse DNS, SPF, DKIM, and DMARC. Avoid running public SMTP directly from a residential/dynamic IP; delivery reliability will be poor and port 25 may be blocked.
 
 After editing `ansible/production_vars.yml`, apply with:
 ```bash

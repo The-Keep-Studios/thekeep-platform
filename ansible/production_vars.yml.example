@@ -40,22 +40,20 @@ platform_secrets:
 #     scopes: "openid,profile,email"
 #     disable_login_form: false
 
-# Optional: enable SMTP for Leantime invitations and password reset emails.
-# Google Workspace quick path: use smtp.gmail.com with a dedicated Workspace
-# mailbox and an app password.
+# Optional: enable internal SMTP capture for Leantime invitations and password
+# reset emails. This sends Leantime mail to the in-cluster Mailpit service, so
+# messages are self-hosted and retrievable through the Mailpit web UI.
 # platform_email:
 #   leantime:
 #     return: "Leantime <noreply@thekeepstudios.com>"
 #     use_smtp: true
-#     smtp_hosts: "smtp.gmail.com"
-#     smtp_auth: true
-#     smtp_username: "noreply@thekeepstudios.com"
-#     smtp_password: "CHANGE_ME_APP_PASSWORD"
-#     smtp_auto_tls: true
-#     smtp_secure: "STARTTLS"
+#     smtp_hosts: "leantime-mailpit.default.svc.cluster.local"
+#     smtp_auth: false
+#     smtp_auto_tls: false
+#     smtp_secure: ""
 #     smtp_ssl_noverify: false
-#     smtp_port: "587"
+#     smtp_port: "1025"
 #
-# Google Workspace SMTP relay alternative: configure SMTP relay in Google Admin,
-# then use smtp-relay.gmail.com. If the relay authenticates by allowed sender IP
-# instead of SMTP auth, set smtp_auth: false and omit username/password.
+# Real outbound self-hosted email is a separate step. Use a dedicated mail host
+# with static IP, matching reverse DNS, SPF, DKIM, and DMARC before sending to
+# public inbox providers.
