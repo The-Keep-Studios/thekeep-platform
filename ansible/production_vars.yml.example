@@ -40,15 +40,17 @@ platform_secrets:
 #     scopes: "openid,profile,email"
 #     disable_login_form: false
 
-# Optional: enable SMTP for Leantime invitations and password reset emails.
+# Optional: enable real SMTP delivery for Leantime invitations and password
+# reset emails through Mailgun. Create and verify a Mailgun sending domain first,
+# then copy the domain's SMTP credentials here.
 # platform_email:
 #   leantime:
-#     return: "Leantime <noreply@thekeepstudios.com>"
+#     return: "noreply@mg.thekeepstudios.com"
 #     use_smtp: true
-#     smtp_hosts: "smtp.example.com"
+#     smtp_hosts: "smtp.mailgun.org"
 #     smtp_auth: true
-#     smtp_username: "smtp-user"
-#     smtp_password: "CHANGE_ME"
+#     smtp_username: "postmaster@mg.thekeepstudios.com"
+#     smtp_password: "CHANGE_ME_MAILGUN_SMTP_PASSWORD"
 #     smtp_auto_tls: true
 #     smtp_secure: "STARTTLS"
 #     smtp_ssl_noverify: false

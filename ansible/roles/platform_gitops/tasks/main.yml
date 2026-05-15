@@ -297,14 +297,14 @@
       namespace: default
       data:
         LEAN_EMAIL_RETURN: "{{ platform_email.leantime.return | default('') }}"
-        LEAN_EMAIL_USE_SMTP: "{{ platform_email.leantime.use_smtp | default(false) | string }}"
+        LEAN_EMAIL_USE_SMTP: "{{ (platform_email.leantime.use_smtp | default(false) | bool) | string | lower }}"
         LEAN_EMAIL_SMTP_HOSTS: "{{ platform_email.leantime.smtp_hosts | default('') }}"
-        LEAN_EMAIL_SMTP_AUTH: "{{ platform_email.leantime.smtp_auth | default(true) | string }}"
+        LEAN_EMAIL_SMTP_AUTH: "{{ (platform_email.leantime.smtp_auth | default(true) | bool) | string | lower }}"
         LEAN_EMAIL_SMTP_USERNAME: "{{ platform_email.leantime.smtp_username | default('') }}"
         LEAN_EMAIL_SMTP_PASSWORD: "{{ platform_email.leantime.smtp_password | default('') }}"
-        LEAN_EMAIL_SMTP_AUTO_TLS: "{{ platform_email.leantime.smtp_auto_tls | default(true) | string }}"
+        LEAN_EMAIL_SMTP_AUTO_TLS: "{{ (platform_email.leantime.smtp_auto_tls | default(true) | bool) | string | lower }}"
         LEAN_EMAIL_SMTP_SECURE: "{{ platform_email.leantime.smtp_secure | default('') }}"
-        LEAN_EMAIL_SMTP_SSLNOVERIFY: "{{ platform_email.leantime.smtp_ssl_noverify | default(false) | string }}"
+        LEAN_EMAIL_SMTP_SSLNOVERIFY: "{{ (platform_email.leantime.smtp_ssl_noverify | default(false) | bool) | string | lower }}"
         LEAN_EMAIL_SMTP_PORT: "{{ platform_email.leantime.smtp_port | default('') }}"
     - name: wisemapping-secrets
       namespace: wisemapping
@@ -518,3 +518,108 @@
   retries: 90
   delay: 10
   changed_when: false
+
+- name: Define Leantime email configuration hash
+  ansible.builtin.set_fact:
+    leantime_email_config_hash: >-
+      {{
+        {
+          'return': platform_email.leantime.return | default(''),
+          'use_smtp': platform_email.leantime.use_smtp | default(false) | bool,
+          'smtp_hosts': platform_email.leantime.smtp_hosts | default(''),
+          'smtp_auth': platform_email.leantime.smtp_auth | default(true) | bool,
+          'smtp_username': platform_email.leantime.smtp_username | default(''),
+          'smtp_password': platform_email.leantime.smtp_password | default(''),
+          'smtp_auto_tls': platform_email.leantime.smtp_auto_tls | default(true) | bool,
+          'smtp_secure': platform_email.leantime.smtp_secure | default(''),
+          'smtp_ssl_noverify': platform_email.leantime.smtp_ssl_noverify | default(false) | bool,
+          'smtp_port': platform_email.leantime.smtp_port | default('')
+        } | to_json | hash('sha256')
+      }}
+  no_log: true
+  when: platform_email.leantime.use_smtp | default(false) | bool
+
+- name: Read applied Leantime email configuration hash
+  ansible.builtin.command:
+    argv:
+      - "{{ platform_kubectl }}"
+      - get
+      - configmap
+      - leantime-email-config-state
+      - -n
+      - default
+      - -o
+      - "jsonpath={.data.hash}"
+  become: true
+  become_user: k3s-admin
+  environment: "{{ platform_kubectl_env }}"
+  register: leantime_email_config_state
+  changed_when: false
+  failed_when: false
+  when: platform_email.leantime.use_smtp | default(false) | bool
+
+- name: Restart Leantime pods after email configuration changes
+  ansible.builtin.command:
+    argv:
+      - "{{ platform_kubectl }}"
+      - delete
+      - pod
+      - -l
+      - app=leantime
+      - -n
+      - default
+      - --ignore-not-found=true
+      - --wait=false
+  become: true
+  become_user: k3s-admin
+  environment: "{{ platform_kubectl_env }}"
+  when:
+    - platform_email.leantime.use_smtp | default(false) | bool
+    - leantime_email_config_state.stdout | default('') | trim != leantime_email_config_hash
+
+- name: Persist Leantime email configuration hash
+  ansible.builtin.command:
+    argv:
+      - "{{ platform_kubectl }}"
+      - apply
+      - -f
+      - "-"
+  args:
+    stdin: >-
+      {{
+        {
+          'apiVersion': 'v1',
+          'kind': 'ConfigMap',
+          'metadata': {
+            'name': 'leantime-email-config-state',
+            'namespace': 'default'
+          },
+          'data': {
+            'hash': leantime_email_config_hash
+          }
+        } | to_nice_yaml
+      }}
+  become: true
+  become_user: k3s-admin
+  environment: "{{ platform_kubectl_env }}"
+  when:
+    - platform_email.leantime.use_smtp | default(false) | bool
+    - leantime_email_config_state.stdout | default('') | trim != leantime_email_config_hash
+
+- name: Wait for Leantime after email configuration changes
+  ansible.builtin.command:
+    argv:
+      - "{{ platform_kubectl }}"
+      - rollout
+      - status
+      - deployment/leantime
+      - -n
+      - default
+      - --timeout=180s
+  become: true
+  become_user: k3s-admin
+  environment: "{{ platform_kubectl_env }}"
+  changed_when: false
+  when:
+    - platform_email.leantime.use_smtp | default(false) | bool
+    - leantime_email_config_state.stdout | default('') | trim != leantime_email_config_hash

@@ -277,10 +277,36 @@ Migration safety:
 - Apply auth and email secret changes with the production playbook:
   `ansible-playbook -i ansible/inventory.production.ini ansible/setup_k3s_production.yml`
 
+## Leantime Email
+
+Leantime SMTP settings live in ignored `ansible/production_vars.yml` under `platform_email.leantime`. The playbook creates the `leantime-email` Kubernetes Secret and restarts Leantime only when the SMTP settings change.
+
+For production transactional mail, use Mailgun SMTP. Mailgun's Free plan currently includes 100 messages per day and one custom sending domain, which is enough for low-volume Leantime invitations and password resets.
+
+Recommended shape:
+- Mailgun sending domain: `mg.thekeepstudios.com`
+- Leantime return address: `noreply@mg.thekeepstudios.com`
+- SMTP host: `smtp.mailgun.org`
+- SMTP port/security: `587` with `STARTTLS`
+- SMTP username: Mailgun domain SMTP login, commonly `postmaster@mg.thekeepstudios.com`
+
+Use `smtp.eu.mailgun.org` instead if the Mailgun sending domain is created in the EU region.
+
+Mailgun setup checklist:
+1. Add `mg.thekeepstudios.com` as a Mailgun sending domain.
+2. Publish the DNS records Mailgun provides for SPF, DKIM, tracking, and MX if required.
+3. Wait for Mailgun to verify the domain.
+4. Copy the Mailgun SMTP username/password into ignored `ansible/production_vars.yml`.
+
+After editing `ansible/production_vars.yml`, apply with:
+```bash
+ansible-playbook -K -i ansible/inventory.production.ini ansible/setup_k3s_production.yml
+```
+
 TODO:
 - Automate Authentik application/provider setup for bundled apps instead of requiring manual UI setup.
 - Generate or reconcile Leantime OIDC client credentials and write them into the `leantime-oidc` secret.
-- Generate or reconcile SMTP/email settings needed for Leantime invitations and password reset flows.
+- Validate Leantime SMTP delivery with a real invitation/password-reset smoke test after SMTP credentials are configured.
 - Keep the automation suitable for open-source reuse by documenting required domain names, redirect URLs, and any secrets that must remain operator-provided.
 
 Authentik bootstrap behavior:
