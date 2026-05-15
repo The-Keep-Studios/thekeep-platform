@@ -186,6 +186,18 @@ kubectl logs -n argocd deployment/argocd-repo-server --tail=100
 kubectl logs -n argocd statefulset/argocd-application-controller --tail=100
 ```
 
+Loki logs in Grafana:
+- The `Loki` data source is provisioned with UID `loki`.
+- The `Leantime Logs` dashboard is provisioned from `kubernetes/platform/monitoring/access/leantime-logs-dashboard.yaml`.
+- In Grafana Explore, use:
+```logql
+{namespace="default", app="leantime", container="leantime"}
+```
+- For invite/reset/mail debugging, use:
+```logql
+{namespace="default", app="leantime", container="leantime"} |~ "(?i)(error|exception|failed|warning|smtp|mail|invite|reset|password)"
+```
+
 Force Argo CD to recompare an app after a live investigation or manual test:
 
 ```bash
