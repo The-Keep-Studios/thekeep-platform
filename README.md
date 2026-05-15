@@ -316,6 +316,7 @@ ansible-playbook -K -i ansible/inventory.production.ini ansible/setup_k3s_produc
 ```
 
 TODO:
+- Add a formal IaC test workflow before merge: local static checks, Helm rendering, server-side dry-run, feature-branch Argo app testing, and final validation playbook gates.
 - Automate Authentik application/provider setup for bundled apps instead of requiring manual UI setup.
 - Generate or reconcile Leantime OIDC client credentials and write them into the `leantime-oidc` secret.
 - Validate Leantime SMTP delivery with a real invitation/password-reset smoke test after SMTP credentials are configured.
