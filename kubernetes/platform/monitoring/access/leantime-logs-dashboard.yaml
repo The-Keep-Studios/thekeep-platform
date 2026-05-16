@@ -39,7 +39,7 @@ data:
         {
           "datasource": {
             "type": "loki",
-            "uid": "loki"
+            "uid": "${datasource}"
           },
           "gridPos": {
             "h": 11,
@@ -62,10 +62,10 @@ data:
             {
               "datasource": {
                 "type": "loki",
-                "uid": "loki"
+                "uid": "${datasource}"
               },
               "editorMode": "code",
-              "expr": "{namespace=\"$namespace\", app=\"$app\", container=\"$container\"} |~ \"$search\"",
+              "expr": "{namespace=\"$namespace\", pod=~\"$pod\", container=~\"$container\"} |~ \"$search\"",
               "queryType": "range",
               "refId": "A"
             }
@@ -76,7 +76,7 @@ data:
         {
           "datasource": {
             "type": "loki",
-            "uid": "loki"
+            "uid": "${datasource}"
           },
           "gridPos": {
             "h": 10,
@@ -99,10 +99,10 @@ data:
             {
               "datasource": {
                 "type": "loki",
-                "uid": "loki"
+                "uid": "${datasource}"
               },
               "editorMode": "code",
-              "expr": "{namespace=\"$namespace\", app=\"$app\", container=\"$container\"} |~ \"(?i)(error|exception|failed|warning|smtp|mail|invite|reset|password)\" |~ \"$search\"",
+              "expr": "{namespace=\"$namespace\", pod=~\"$pod\", container=~\"$container\"} |~ \"(?i)(500|error|exception|failed|warning|smtp|mail|invite|reset|password)\" |~ \"$search\"",
               "queryType": "range",
               "refId": "A"
             }
@@ -123,50 +123,48 @@ data:
           {
             "current": {
               "selected": false,
+              "text": "Loki",
+              "value": "Loki"
+            },
+            "hide": 0,
+            "includeAll": false,
+            "label": "Loki Datasource",
+            "multi": false,
+            "name": "datasource",
+            "options": [],
+            "query": "loki",
+            "refresh": 1,
+            "regex": "",
+            "skipUrlSync": false,
+            "type": "datasource"
+          },
+          {
+            "current": {
+              "selected": false,
               "text": "default",
               "value": "default"
             },
-            "datasource": {
-              "type": "loki",
-              "uid": "loki"
-            },
-            "definition": "label_values(namespace)",
             "hide": 0,
-            "includeAll": false,
             "label": "Namespace",
-            "multi": false,
             "name": "namespace",
             "options": [],
-            "query": "label_values(namespace)",
-            "refresh": 1,
-            "regex": "",
+            "query": "default",
             "skipUrlSync": false,
-            "sort": 1,
-            "type": "query"
+            "type": "textbox"
           },
           {
             "current": {
               "selected": false,
-              "text": "leantime",
-              "value": "leantime"
+              "text": "leantime-.*",
+              "value": "leantime-.*"
             },
-            "datasource": {
-              "type": "loki",
-              "uid": "loki"
-            },
-            "definition": "label_values({namespace=\"$namespace\"}, app)",
             "hide": 0,
-            "includeAll": false,
-            "label": "App",
-            "multi": false,
-            "name": "app",
+            "label": "Pod Regex",
+            "name": "pod",
             "options": [],
-            "query": "label_values({namespace=\"$namespace\"}, app)",
-            "refresh": 1,
-            "regex": "",
+            "query": "leantime-.*",
             "skipUrlSync": false,
-            "sort": 1,
-            "type": "query"
+            "type": "textbox"
           },
           {
             "current": {
@@ -174,23 +172,14 @@ data:
               "text": "leantime",
               "value": "leantime"
             },
-            "datasource": {
-              "type": "loki",
-              "uid": "loki"
-            },
-            "definition": "label_values({namespace=\"$namespace\", app=\"$app\"}, container)",
             "hide": 0,
-            "includeAll": false,
-            "label": "Container",
+            "label": "Container Regex",
             "multi": false,
             "name": "container",
             "options": [],
-            "query": "label_values({namespace=\"$namespace\", app=\"$app\"}, container)",
-            "refresh": 1,
-            "regex": "",
+            "query": "leantime",
             "skipUrlSync": false,
-            "sort": 1,
-            "type": "query"
+            "type": "textbox"
           },
           {
             "current": {

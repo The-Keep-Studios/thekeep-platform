@@ -191,11 +191,11 @@ Loki logs in Grafana:
 - The `Leantime Logs` dashboard is provisioned from `kubernetes/platform/monitoring/access/leantime-logs-dashboard.yaml`.
 - In Grafana Explore, use:
 ```logql
-{namespace="default", app="leantime", container="leantime"}
+{namespace="default", pod=~"leantime-.*"}
 ```
 - For invite/reset/mail debugging, use:
 ```logql
-{namespace="default", app="leantime", container="leantime"} |~ "(?i)(error|exception|failed|warning|smtp|mail|invite|reset|password)"
+{namespace="default", pod=~"leantime-.*"} |~ "(?i)(500|error|exception|failed|warning|smtp|mail|invite|reset|password)"
 ```
 
 Force Argo CD to recompare an app after a live investigation or manual test:
