@@ -138,6 +138,14 @@ spec:
   destination:
     server: https://kubernetes.default.svc
     namespace: monitoring
+  ignoreDifferences:
+  - group: apps
+    kind: StatefulSet
+    namespace: monitoring
+    name: loki
+    jqPathExpressions:
+    - '.spec.volumeClaimTemplates[] | select(.metadata.name == "storage") | .apiVersion'
+    - '.spec.volumeClaimTemplates[] | select(.metadata.name == "storage") | .kind'
   syncPolicy:
     automated:
       prune: false
