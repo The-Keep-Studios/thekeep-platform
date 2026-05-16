@@ -186,6 +186,18 @@ kubectl logs -n argocd deployment/argocd-repo-server --tail=100
 kubectl logs -n argocd statefulset/argocd-application-controller --tail=100
 ```
 
+Loki logs in Grafana:
+- The `Loki` data source is provisioned with UID `loki`.
+- The `Leantime Logs` dashboard is provisioned from `kubernetes/platform/monitoring/access/leantime-logs-dashboard.yaml`.
+- In Grafana Explore, use:
+```logql
+{namespace="default", pod=~"leantime-.*"}
+```
+- For invite/reset/mail debugging, use:
+```logql
+{namespace="default", pod=~"leantime-.*"} |~ "(?i)(500|error|exception|failed|warning|smtp|mail|invite|reset|password)"
+```
+
 Force Argo CD to recompare an app after a live investigation or manual test:
 
 ```bash
@@ -304,6 +316,7 @@ ansible-playbook -K -i ansible/inventory.production.ini ansible/setup_k3s_produc
 ```
 
 TODO:
+- Add a formal IaC test workflow before merge: local static checks, Helm rendering, server-side dry-run, feature-branch Argo app testing, and final validation playbook gates.
 - Automate Authentik application/provider setup for bundled apps instead of requiring manual UI setup.
 - Generate or reconcile Leantime OIDC client credentials and write them into the `leantime-oidc` secret.
 - Validate Leantime SMTP delivery with a real invitation/password-reset smoke test after SMTP credentials are configured.
