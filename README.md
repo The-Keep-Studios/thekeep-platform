@@ -187,7 +187,7 @@ kubectl logs -n argocd statefulset/argocd-application-controller --tail=100
 ```
 
 Loki logs in Grafana:
-- The `Loki` data source is provisioned with UID `loki`.
+- The `Loki` data source is provisioned by the monitoring chart and selected by dashboard variable.
 - The `Leantime Logs` dashboard is provisioned from `kubernetes/platform/monitoring/access/leantime-logs-dashboard.yaml`.
 - In Grafana Explore, use:
 ```logql

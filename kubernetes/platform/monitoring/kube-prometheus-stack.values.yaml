@@ -27,7 +27,6 @@ grafana:
       searchNamespace: monitoring
   additionalDataSources:
   - name: Loki
-    uid: loki
     type: loki
     access: proxy
     url: http://loki.monitoring.svc.cluster.local:3100
