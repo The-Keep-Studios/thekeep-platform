@@ -72,6 +72,42 @@ additionalPrometheusRulesMap:
             annotations:
               summary: "Leantime database backup failed"
               description: "The Leantime database backup job {{ $labels.job_name }} has failed."
+  platform-visibility-rules:
+    groups:
+      - name: platform.visibility.rules
+        rules:
+          - alert: WiseMappingBackendUnavailable
+            expr: kube_deployment_status_replicas_available{namespace="wisemapping", deployment="wisemapping"} < kube_deployment_spec_replicas{namespace="wisemapping", deployment="wisemapping"}
+            for: 5m
+            labels:
+              severity: critical
+            annotations:
+              summary: "WiseMapping backend is unavailable"
+              description: "The WiseMapping deployment has fewer available replicas than desired. The nginx frontend may still answer / while the Java API is down."
+          - alert: GrafanaUnavailable
+            expr: kube_deployment_status_replicas_available{namespace="monitoring", deployment="kube-prometheus-stack-grafana"} < kube_deployment_spec_replicas{namespace="monitoring", deployment="kube-prometheus-stack-grafana"}
+            for: 5m
+            labels:
+              severity: critical
+            annotations:
+              summary: "Grafana is unavailable"
+              description: "The Grafana deployment has fewer available replicas than desired."
+          - alert: LokiUnavailable
+            expr: kube_statefulset_status_replicas_ready{namespace="monitoring", statefulset="loki"} < kube_statefulset_replicas{namespace="monitoring", statefulset="loki"}
+            for: 5m
+            labels:
+              severity: critical
+            annotations:
+              summary: "Loki is unavailable"
+              description: "The Loki StatefulSet has fewer ready replicas than desired."
+          - alert: PromtailUnavailable
+            expr: kube_daemonset_status_number_available{namespace="monitoring", daemonset="loki-promtail"} < kube_daemonset_status_desired_number_scheduled{namespace="monitoring", daemonset="loki-promtail"}
+            for: 10m
+            labels:
+              severity: warning
+            annotations:
+              summary: "Promtail is unavailable"
+              description: "Promtail is not running on every scheduled node, so pod logs may be missing from Loki."
 
 alertmanager:
   ingress:

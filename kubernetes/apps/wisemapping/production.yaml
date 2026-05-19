@@ -22,18 +22,6 @@ data:
         properties:
           hibernate:
             dialect: "org.hibernate.dialect.PostgreSQLDialect"
-      security:
-        oauth2:
-          client:
-            registration:
-              google:
-                client-id: "${OAUTH_GOOGLE_CLIENT_ID:}"
-                client-secret: "${OAUTH_GOOGLE_CLIENT_SECRET:}"
-                scope: "openid,profile,email"
-                redirect-uri: "${app.site.api-base-url}/login/oauth2/code/{registrationId}"
-            provider:
-              google:
-                issuer-uri: "${OAUTH_GOOGLE_ISSUER_URI:https://accounts.google.com}"
     app:
       site:
         ui-base-url: "https://mindmaps.thekeepstudios.com"
@@ -169,20 +157,30 @@ spec:
           containerPort: 80
         readinessProbe:
           httpGet:
-            path: /
+            path: /api/restful/app/config
             port: http
-          initialDelaySeconds: 20
+            httpHeaders:
+            - name: Host
+              value: mindmaps.thekeepstudios.com
+            - name: X-Forwarded-Proto
+              value: https
+          initialDelaySeconds: 30
           periodSeconds: 10
           timeoutSeconds: 5
-          failureThreshold: 12
+          failureThreshold: 6
         livenessProbe:
           httpGet:
-            path: /
+            path: /api/restful/app/config
             port: http
-          initialDelaySeconds: 40
-          periodSeconds: 20
+            httpHeaders:
+            - name: Host
+              value: mindmaps.thekeepstudios.com
+            - name: X-Forwarded-Proto
+              value: https
+          initialDelaySeconds: 120
+          periodSeconds: 30
           timeoutSeconds: 5
-          failureThreshold: 6
+          failureThreshold: 4
         volumeMounts:
         - name: app-config
           mountPath: /app/config/application.yml

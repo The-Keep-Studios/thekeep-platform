@@ -98,6 +98,29 @@ sudo -u k3s-admin -H env KUBECONFIG=/home/k3s-admin/.kube/config kubectl get cro
 bash scripts/restore-leantime-backup.sh /path/to/backup.sql.gz
 ```
 
+### Running From A Workstation
+
+The Ansible controller does not need to be the k3s control-plane host. The production inventory should point at the control-plane host over SSH:
+
+```ini
+[k3s_control_plane]
+framework-desktop ansible_host=192.168.0.46 ansible_user=iantsmall
+
+[k3s_control_plane:vars]
+ansible_connection=ssh
+ansible_become=true
+```
+
+Before running the production playbook from a workstation:
+1. Confirm SSH and sudo access to the control-plane host:
+   `ansible -K -i ansible/inventory.production.ini k3s_control_plane -m ping`
+2. Confirm the local checkout is on the intended branch and that `HEAD` is pushed to `gitops_repo_url` / `gitops_revision`.
+3. For feature-branch testing, set ignored `ansible/production_vars.yml` and committed GitOps manifests to the same branch. Revert both back to `main` before merge.
+4. Run the playbook from the workstation:
+   `ansible-playbook -K -i ansible/inventory.production.ini ansible/setup_k3s_production.yml`
+
+The playbook renders templates and performs Git checks on the workstation, then runs Kubernetes commands on the remote control-plane host as `k3s-admin`.
+
 ### QA/Security: Validation Path
 
 1. Confirm control plane and pods:
@@ -136,7 +159,9 @@ Live evidence required before claiming GO:
 - Argo app sync and health output;
 - Cloudflare HTTPS endpoint results;
 - direct-origin block results, where any HTTP response is a failure;
-- in-cluster `PrometheusRule` containing `LeantimeBackupFailed`;
+- in-cluster `PrometheusRule` containing backup and platform visibility alerts;
+- in-cluster WiseMapping API validation against `/api/restful/app/config`;
+- in-cluster Loki volume API validation for Grafana Logs Drilldown;
 - Leantime backup Job and readable non-empty backup artifact verification.
 
 ### Ops Tips
@@ -189,6 +214,9 @@ kubectl logs -n argocd statefulset/argocd-application-controller --tail=100
 Loki logs in Grafana:
 - The `Loki` data source is provisioned by the monitoring chart and selected by dashboard variable.
 - The `Leantime Logs` dashboard is provisioned from `kubernetes/platform/monitoring/access/leantime-logs-dashboard.yaml`.
+- Grafana Logs Drilldown needs Loki's `/loki/api/v1/index/volume` API enabled; the validation playbook checks this endpoint from inside the cluster.
+- `platform-monitoring-loki` uses the current community Loki chart in monolithic mode with pattern ingestion, structured metadata, log-level discovery, and volume queries enabled.
+- Promtail is installed as an explicit chart source for log shipping. Promtail is deprecated upstream, so the next logging-agent hardening task is migrating log shipping to Grafana Alloy.
 - In Grafana Explore, use:
 ```logql
 {namespace="default", pod=~"leantime-.*"}
@@ -197,6 +225,15 @@ Loki logs in Grafana:
 ```logql
 {namespace="default", pod=~"leantime-.*"} |~ "(?i)(500|error|exception|failed|warning|smtp|mail|invite|reset|password)"
 ```
+- For WiseMapping API failures, start with:
+```logql
+{namespace="wisemapping", pod=~"wisemapping-.*"} |~ "(?i)(error|exception|failed|fatal|spring|oauth|postgres|jdbc|502|api/restful/app/config)"
+```
+
+Platform visibility alerts:
+- `WiseMappingBackendUnavailable` catches the nginx-up/API-down failure mode by making the WiseMapping probe hit `/api/restful/app/config`.
+- `GrafanaUnavailable`, `LokiUnavailable`, and `PromtailUnavailable` catch loss of the observability stack itself.
+- These alerts are Prometheus rules managed by `kubernetes/platform/monitoring/kube-prometheus-stack.values.yaml`.
 
 Force Argo CD to recompare an app after a live investigation or manual test:
 
@@ -288,6 +325,7 @@ Migration safety:
 - Set Leantime SMTP values in ignored `ansible/production_vars.yml` under `platform_email.leantime`.
 - Apply auth and email secret changes with the production playbook:
   `ansible-playbook -i ansible/inventory.production.ini ansible/setup_k3s_production.yml`
+- WiseMapping does not currently render a Spring OAuth client registration while OIDC is disabled. Add an Authentik-backed registration deliberately when WiseMapping SSO is implemented.
 
 ## Leantime Email
 
@@ -317,6 +355,7 @@ ansible-playbook -K -i ansible/inventory.production.ini ansible/setup_k3s_produc
 
 TODO:
 - Add a formal IaC test workflow before merge: local static checks, Helm rendering, server-side dry-run, feature-branch Argo app testing, and final validation playbook gates.
+- Migrate log shipping from deprecated Promtail to Grafana Alloy.
 - Automate Authentik application/provider setup for bundled apps instead of requiring manual UI setup.
 - Generate or reconcile Leantime OIDC client credentials and write them into the `leantime-oidc` secret.
 - Validate Leantime SMTP delivery with a real invitation/password-reset smoke test after SMTP credentials are configured.

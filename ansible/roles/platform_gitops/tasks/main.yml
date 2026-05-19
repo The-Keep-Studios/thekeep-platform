@@ -312,7 +312,7 @@
         WISEMAPPING_POSTGRES_PASSWORD: "{{ platform_secrets.wisemapping_postgres_password }}"
         WISEMAPPING_JWT_SECRET: "{{ platform_secrets.wisemapping_jwt_secret }}"
         WISEMAPPING_OAUTH_TOKEN_SECRET: "{{ platform_secrets.wisemapping_oauth_token_secret }}"
-        WISEMAPPING_OAUTH_ENABLED: "{{ platform_oidc.wisemapping.enable | default(false) | string }}"
+        WISEMAPPING_OAUTH_ENABLED: "{{ (platform_oidc.wisemapping.enable | default(false) | bool) | string | lower }}"
         OAUTH_GOOGLE_CLIENT_ID: "{{ platform_oidc.wisemapping.google_client_id | default('') }}"
         OAUTH_GOOGLE_CLIENT_SECRET: "{{ platform_oidc.wisemapping.google_client_secret | default('') }}"
         OAUTH_GOOGLE_ISSUER_URI: "{{ platform_oidc.wisemapping.google_issuer_uri | default('') }}"
@@ -357,12 +357,24 @@
   no_log: true
   when: monitoring_enabled | default(true) | bool
 
+- name: Create remote temporary Argo CD kustomize directory
+  ansible.builtin.tempfile:
+    state: directory
+    suffix: argocd-kustomize
+  register: argocd_kustomize_dir
+
+- name: Copy Argo CD kustomize inputs to remote host
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../kubernetes/platform/argocd/"
+    dest: "{{ argocd_kustomize_dir.path }}/"
+    mode: preserve
+
 - name: Render Argo CD manifests with kustomize
   ansible.builtin.command:
     argv:
       - "{{ platform_kubectl }}"
       - kustomize
-      - "{{ playbook_dir }}/../kubernetes/platform/argocd"
+      - "{{ argocd_kustomize_dir.path }}"
   register: argocd_kustomize_manifest
   changed_when: false
 
@@ -380,6 +392,11 @@
   become: true
   become_user: k3s-admin
   environment: "{{ platform_kubectl_env }}"
+
+- name: Remove remote temporary Argo CD kustomize directory
+  ansible.builtin.file:
+    path: "{{ argocd_kustomize_dir.path }}"
+    state: absent
 
 - name: Build Argo CD GitOps repository credential from inline SSH key
   ansible.builtin.set_fact:

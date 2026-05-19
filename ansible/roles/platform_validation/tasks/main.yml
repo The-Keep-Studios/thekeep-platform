@@ -108,7 +108,7 @@
   changed_when: false
   failed_when: backup_cron.rc != 0 or backup_cron.stdout | default('') | trim | length == 0
 
-- name: Verify Leantime backup alert is reconciled
+- name: Verify platform alert rules are reconciled
   ansible.builtin.command:
     argv:
       - "{{ platform_kubectl }}"
@@ -123,7 +123,13 @@
   environment: "{{ platform_kubectl_env }}"
   register: prometheus_rules
   changed_when: false
-  failed_when: prometheus_rules.rc != 0 or not (prometheus_rules.stdout is search('LeantimeBackupFailed'))
+  failed_when: >
+    prometheus_rules.rc != 0 or
+    not (prometheus_rules.stdout is search('LeantimeBackupFailed')) or
+    not (prometheus_rules.stdout is search('WiseMappingBackendUnavailable')) or
+    not (prometheus_rules.stdout is search('GrafanaUnavailable')) or
+    not (prometheus_rules.stdout is search('LokiUnavailable')) or
+    not (prometheus_rules.stdout is search('PromtailUnavailable'))
   when: monitoring_enabled | default(true) | bool
 
 - name: Verify Loki service is reconciled
@@ -145,6 +151,29 @@
   failed_when: loki_service.rc != 0 or loki_service.stdout | default('') | trim != 'service/loki'
   when: monitoring_enabled | default(true) | bool
 
+- name: Verify Loki GitOps application uses current chart
+  ansible.builtin.command:
+    argv:
+      - "{{ platform_kubectl }}"
+      - get
+      - application
+      - platform-monitoring-loki
+      - -n
+      - argocd
+      - -o
+      - "jsonpath={range .spec.sources[*]}{.repoURL}{' | '}{.chart}{' | '}{.targetRevision}{'\\n'}{end}"
+  become: true
+  become_user: k3s-admin
+  environment: "{{ platform_kubectl_env }}"
+  register: loki_application_sources
+  changed_when: false
+  failed_when: >
+    loki_application_sources.rc != 0 or
+    'https://grafana-community.github.io/helm-charts | loki | 13.6.1' not in loki_application_sources.stdout or
+    'https://grafana.github.io/helm-charts | promtail | 6.17.1' not in loki_application_sources.stdout or
+    gitops_revision not in loki_application_sources.stdout
+  when: monitoring_enabled | default(true) | bool
+
 - name: Verify Leantime logs dashboard is reconciled
   ansible.builtin.command:
     argv:
@@ -163,6 +192,80 @@
   changed_when: false
   failed_when: leantime_logs_dashboard.rc != 0 or leantime_logs_dashboard.stdout | default('') | trim != '1'
   when: monitoring_enabled | default(true) | bool
+
+- name: Read platform probe validation timestamp
+  ansible.builtin.command:
+    argv:
+      - date
+      - +%s
+  register: platform_probe_validation_timestamp
+  changed_when: false
+
+- name: Set platform probe validation pod names
+  ansible.builtin.set_fact:
+    loki_volume_validation_pod_name: "loki-volume-validation-{{ platform_probe_validation_timestamp.stdout }}"
+    wisemapping_api_validation_pod_name: "wisemapping-api-validation-{{ platform_probe_validation_timestamp.stdout }}"
+    loki_volume_validation_start_ns: "{{ ((platform_probe_validation_timestamp.stdout | int) - 900) ~ '000000000' }}"
+    loki_volume_validation_end_ns: "{{ (platform_probe_validation_timestamp.stdout | int) ~ '000000000' }}"
+
+- name: Verify Loki volume API for Grafana Logs Drilldown
+  ansible.builtin.command:
+    argv:
+      - "{{ platform_kubectl }}"
+      - run
+      - "{{ loki_volume_validation_pod_name }}"
+      - -n
+      - monitoring
+      - --rm=true
+      - --attach=true
+      - -i
+      - --restart=Never
+      - --image=curlimages/curl:8.8.0
+      - --quiet=true
+      - --
+      - curl
+      - -fsS
+      - --max-time
+      - "15"
+      - "http://loki.monitoring.svc.cluster.local:3100/loki/api/v1/index/volume?query=%7Bnamespace%3D~%22.%2B%22%7D&start={{ loki_volume_validation_start_ns }}&end={{ loki_volume_validation_end_ns }}&limit=10"
+  become: true
+  become_user: k3s-admin
+  environment: "{{ platform_kubectl_env }}"
+  register: loki_volume_api
+  changed_when: false
+  failed_when: loki_volume_api.rc != 0 or not (loki_volume_api.stdout is search('"status":"success"'))
+  when: monitoring_enabled | default(true) | bool
+
+- name: Verify WiseMapping backend API is reachable
+  ansible.builtin.command:
+    argv:
+      - "{{ platform_kubectl }}"
+      - run
+      - "{{ wisemapping_api_validation_pod_name }}"
+      - -n
+      - wisemapping
+      - --rm=true
+      - --attach=true
+      - -i
+      - --restart=Never
+      - --image=curlimages/curl:8.8.0
+      - --quiet=true
+      - --
+      - curl
+      - -fsS
+      - --max-time
+      - "15"
+      - -H
+      - "Host: mindmaps.thekeepstudios.com"
+      - -H
+      - "X-Forwarded-Proto: https"
+      - "http://wisemapping/api/restful/app/config"
+  become: true
+  become_user: k3s-admin
+  environment: "{{ platform_kubectl_env }}"
+  register: wisemapping_backend_api
+  changed_when: false
+  failed_when: wisemapping_backend_api.rc != 0
 
 - name: Read Leantime backup validation timestamp
   ansible.builtin.command:

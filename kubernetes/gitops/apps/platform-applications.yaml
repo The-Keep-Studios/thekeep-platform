@@ -125,13 +125,20 @@ metadata:
 spec:
   project: platform
   sources:
-  - repoURL: https://grafana.github.io/helm-charts
-    chart: loki-stack
-    targetRevision: 2.10.3
+  - repoURL: https://grafana-community.github.io/helm-charts
+    chart: loki
+    targetRevision: 13.6.1
     helm:
       releaseName: loki
       valueFiles:
       - $values/kubernetes/platform/monitoring/loki-stack.values.yaml
+  - repoURL: https://grafana.github.io/helm-charts
+    chart: promtail
+    targetRevision: 6.17.1
+    helm:
+      releaseName: loki-promtail
+      valueFiles:
+      - $values/kubernetes/platform/monitoring/promtail.values.yaml
   - repoURL: "https://github.com/The-Keep-Studios/thekeep-platform.git"
     targetRevision: "main"
     ref: values
@@ -148,8 +155,9 @@ spec:
     - '.spec.volumeClaimTemplates[] | select(.metadata.name == "storage") | .kind'
   syncPolicy:
     automated:
-      prune: false
+      prune: true
       selfHeal: true
     syncOptions:
     - CreateNamespace=true
+    - PruneLast=true
     - ServerSideApply=true
