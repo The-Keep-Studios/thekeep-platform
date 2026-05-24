@@ -1,0 +1,26 @@
+# Local development environment settings.
+# Copy this file to ansible/dev_vars.yml for workstation-specific overrides.
+# ansible/dev_vars.yml is intentionally ignored by Git.
+
+# Profiles:
+#   static       Run local static IaC checks only.
+#   wisemapping  Run static checks, create/reuse k3d, and smoke-test WiseMapping.
+local_dev_profile: wisemapping
+
+# Installing k3d writes to /usr/local/bin and requires:
+#   ansible-playbook -K -i ansible/inventory.ini ansible/setup_dev_environment.yml -e local_dev_install_k3d=true
+local_dev_install_k3d: false
+local_dev_k3d_install_tag: ""
+local_dev_k3d_install_url: "https://raw.githubusercontent.com/k3d-io/k3d/main/install.sh"
+
+local_dev_cluster_name: thekeep-dev
+local_dev_k3s_version: "v1.35.3+k3s1"
+local_dev_k3d_wait_timeout: 180s
+
+local_dev_run_static_checks: true
+local_dev_include_remote_kustomize: false
+local_dev_create_cluster: true
+local_dev_run_wisemapping_smoke: true
+
+local_dev_wisemapping_probe_host: mindmaps.thekeepstudios.com
+local_dev_wisemapping_wait_timeout: 10m

@@ -1,0 +1,177 @@
+- name: Normalize local development profile
+  ansible.builtin.set_fact:
+    local_dev_effective_profile: "{{ local_dev_profile | default('wisemapping') }}"
+  tags: [always]
+
+- name: Validate local development profile
+  ansible.builtin.assert:
+    that:
+      - local_dev_effective_profile in ['static', 'wisemapping']
+    fail_msg: "local_dev_profile must be one of: static, wisemapping."
+  tags: [always]
+
+- name: Apply local development profile defaults
+  ansible.builtin.set_fact:
+    local_dev_run_static_checks_effective: "{{ local_dev_run_static_checks | default(true) | bool }}"
+    local_dev_create_cluster_effective: >-
+      {{
+        (local_dev_create_cluster | default(local_dev_effective_profile == 'wisemapping')) | bool
+      }}
+    local_dev_run_wisemapping_smoke_effective: >-
+      {{
+        (local_dev_run_wisemapping_smoke | default(local_dev_effective_profile == 'wisemapping')) | bool
+      }}
+  tags: [always]
+
+- name: Check required local commands for static checks
+  ansible.builtin.shell: "command -v {{ item | quote }}"
+  register: local_dev_static_command_check
+  changed_when: false
+  failed_when: false
+  loop:
+    - git
+    - bash
+    - kubectl
+    - ansible-playbook
+  when: local_dev_run_static_checks_effective | bool
+
+- name: Fail if static check commands are missing
+  ansible.builtin.fail:
+    msg: "Missing required local command for static checks: {{ item.item }}"
+  loop: "{{ local_dev_static_command_check.results | default([]) }}"
+  when:
+    - local_dev_run_static_checks_effective | bool
+    - item.rc != 0
+
+- name: Check Docker CLI for local cluster tests
+  ansible.builtin.shell: "command -v docker"
+  register: local_dev_docker_command_check
+  changed_when: false
+  failed_when: false
+  when: >
+    (local_dev_create_cluster_effective | bool) or
+    (local_dev_run_wisemapping_smoke_effective | bool)
+
+- name: Fail if Docker CLI is missing for local cluster tests
+  ansible.builtin.fail:
+    msg: >-
+      Missing required local command: docker. Install and start Docker or a compatible
+      container runtime before running the local k3d development environment.
+  when:
+    - (local_dev_create_cluster_effective | bool) or (local_dev_run_wisemapping_smoke_effective | bool)
+    - local_dev_docker_command_check.rc != 0
+
+- name: Check Docker daemon access for local cluster tests
+  ansible.builtin.command:
+    argv:
+      - docker
+      - info
+  register: local_dev_docker_info
+  changed_when: false
+  failed_when: false
+  when: >
+    (local_dev_create_cluster_effective | bool) or
+    (local_dev_run_wisemapping_smoke_effective | bool)
+
+- name: Fail if Docker daemon is unavailable
+  ansible.builtin.fail:
+    msg: >-
+      Docker is installed but not reachable by this user. Start Docker and make sure
+      your user can run `docker info` without sudo.
+      stderr={{ local_dev_docker_info.stderr | default('') | trim | default('none', true) }}
+  when:
+    - (local_dev_create_cluster_effective | bool) or (local_dev_run_wisemapping_smoke_effective | bool)
+    - local_dev_docker_info.rc != 0
+
+- name: Check k3d command
+  ansible.builtin.shell: "command -v k3d"
+  register: local_dev_k3d_command_check
+  changed_when: false
+  failed_when: false
+  when: >
+    (local_dev_create_cluster_effective | bool) or
+    (local_dev_run_wisemapping_smoke_effective | bool)
+
+- name: Download k3d installer when requested
+  ansible.builtin.get_url:
+    url: "{{ local_dev_k3d_install_url | default('https://raw.githubusercontent.com/k3d-io/k3d/main/install.sh') }}"
+    dest: /tmp/k3d-install.sh
+    mode: "0755"
+  when:
+    - ((local_dev_create_cluster_effective | bool) or (local_dev_run_wisemapping_smoke_effective | bool))
+    - local_dev_k3d_command_check.rc != 0
+    - local_dev_install_k3d | default(false) | bool
+
+- name: Install k3d when requested
+  ansible.builtin.command:
+    argv:
+      - bash
+      - /tmp/k3d-install.sh
+  environment:
+    TAG: "{{ local_dev_k3d_install_tag | default('') }}"
+  become: true
+  args:
+    creates: /usr/local/bin/k3d
+  when:
+    - ((local_dev_create_cluster_effective | bool) or (local_dev_run_wisemapping_smoke_effective | bool))
+    - local_dev_k3d_command_check.rc != 0
+    - local_dev_install_k3d | default(false) | bool
+
+- name: Recheck k3d command
+  ansible.builtin.shell: "command -v k3d"
+  register: local_dev_k3d_command_recheck
+  changed_when: false
+  failed_when: false
+  when: >
+    (local_dev_create_cluster_effective | bool) or
+    (local_dev_run_wisemapping_smoke_effective | bool)
+
+- name: Fail if k3d is missing for local cluster tests
+  ansible.builtin.fail:
+    msg: >-
+      Missing required local command: k3d. Install k3d or rerun with
+      `-K -e local_dev_install_k3d=true` to let Ansible install it using the k3d installer.
+  when:
+    - (local_dev_create_cluster_effective | bool) or (local_dev_run_wisemapping_smoke_effective | bool)
+    - local_dev_k3d_command_recheck.rc != 0
+
+- name: Run local static IaC checks
+  ansible.builtin.command:
+    argv:
+      - "{{ playbook_dir }}/../scripts/test-iac-static.sh"
+  environment:
+    IAC_STATIC_INCLUDE_REMOTE: "{{ (local_dev_include_remote_kustomize | default(false) | bool) | string | lower }}"
+  changed_when: false
+  when: local_dev_run_static_checks_effective | bool
+
+- name: Create or reuse local k3d development cluster
+  ansible.builtin.command:
+    argv:
+      - "{{ playbook_dir }}/../scripts/dev-cluster-up.sh"
+  environment:
+    K3D_CLUSTER_NAME: "{{ local_dev_cluster_name | default('thekeep-dev') }}"
+    K3S_VERSION: "{{ local_dev_k3s_version | default(k3s_version | default('v1.35.3+k3s1')) }}"
+    K3D_WAIT_TIMEOUT: "{{ local_dev_k3d_wait_timeout | default('180s') }}"
+  changed_when: "'Creating k3d cluster' in local_dev_cluster_up.stdout"
+  register: local_dev_cluster_up
+  when: local_dev_create_cluster_effective | bool
+
+- name: Run WiseMapping smoke test on local k3d cluster
+  ansible.builtin.command:
+    argv:
+      - "{{ playbook_dir }}/../scripts/dev-wisemapping-smoke.sh"
+  environment:
+    K3D_CLUSTER_NAME: "{{ local_dev_cluster_name | default('thekeep-dev') }}"
+    WISEMAPPING_PROBE_HOST: "{{ local_dev_wisemapping_probe_host | default('mindmaps.thekeepstudios.com') }}"
+    WISEMAPPING_WAIT_TIMEOUT: "{{ local_dev_wisemapping_wait_timeout | default('10m') }}"
+  changed_when: false
+  when: local_dev_run_wisemapping_smoke_effective | bool
+
+- name: Report local development environment commands
+  ansible.builtin.debug:
+    msg:
+      - "Local development profile completed: {{ local_dev_effective_profile }}"
+      - "Cluster: {{ local_dev_cluster_name | default('thekeep-dev') }}"
+      - "Static checks: scripts/test-iac-static.sh"
+      - "WiseMapping smoke: scripts/dev-wisemapping-smoke.sh"
+      - "Cleanup: scripts/dev-cluster-down.sh"

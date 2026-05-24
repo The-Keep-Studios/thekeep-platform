@@ -39,6 +39,45 @@ IAC_STATIC_INCLUDE_REMOTE=true scripts/test-iac-static.sh
 
 This is the first check to run before committing an IaC change.
 
+## Ansible Workstation Setup
+
+Use the Ansible entrypoint when you want one command to prepare and validate a local development environment:
+
+```bash
+ansible-playbook -i ansible/inventory.ini ansible/setup_dev_environment.yml
+```
+
+By default this runs the `wisemapping` profile:
+
+- static IaC checks;
+- Docker/k3d preflight checks;
+- local k3d cluster creation or reuse;
+- WiseMapping smoke test.
+
+If `k3d` is not installed, either install it yourself or allow Ansible to install it with the upstream k3d install script:
+
+```bash
+ansible-playbook -K -i ansible/inventory.ini ansible/setup_dev_environment.yml \
+  -e local_dev_install_k3d=true
+```
+
+The playbook does not install Docker. Docker installation and group membership differ enough by workstation that this should remain an explicit developer setup step.
+
+For static checks only:
+
+```bash
+ansible-playbook -i ansible/inventory.ini ansible/setup_dev_environment.yml \
+  -e local_dev_profile=static
+```
+
+For workstation-specific overrides:
+
+```bash
+cp ansible/dev_vars.yml.example ansible/dev_vars.yml
+```
+
+`ansible/dev_vars.yml` is ignored by Git.
+
 ## Disposable k3s Cluster
 
 Create or reuse a local k3d cluster:
