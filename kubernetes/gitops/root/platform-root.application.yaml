@@ -7,7 +7,7 @@ spec:
   project: platform
   source:
     repoURL: "https://github.com/The-Keep-Studios/thekeep-platform.git"
-    targetRevision: "main"
+    targetRevision: "feature/wisemapping-recovery"
     path: kubernetes/gitops/apps
     directory:
       recurse: true

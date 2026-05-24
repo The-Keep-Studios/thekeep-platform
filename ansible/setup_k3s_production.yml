@@ -90,6 +90,23 @@
       become: false
       tags: [always]
 
+    - name: Fail if WiseMapping OIDC is enabled without provider settings
+      ansible.builtin.fail:
+        msg: >-
+          platform_oidc.wisemapping.enable is true, but google_client_id,
+          google_client_secret, and google_issuer_uri must all be configured.
+          Use the Authentik issuer URL for google_issuer_uri when Authentik is the upstream provider.
+      when: >
+        (platform_oidc.wisemapping.enable | default(false) | bool) and
+        (
+          (platform_oidc.wisemapping.google_client_id | default('') | trim | length == 0) or
+          (platform_oidc.wisemapping.google_client_secret | default('') | trim | length == 0) or
+          (platform_oidc.wisemapping.google_issuer_uri | default('') | trim | length == 0)
+        )
+      delegate_to: localhost
+      become: false
+      tags: [always]
+
     - name: Define required Leantime SMTP settings
       ansible.builtin.set_fact:
         required_leantime_smtp_keys: >-
