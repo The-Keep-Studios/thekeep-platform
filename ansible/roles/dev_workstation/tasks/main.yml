@@ -157,6 +157,9 @@
     K3D_CLUSTER_NAME: "{{ local_dev_cluster_name | default('thekeep-dev') }}"
     K3S_VERSION: "{{ local_dev_k3s_version | default(k3s_version | default('v1.35.3+k3s1')) }}"
     K3D_WAIT_TIMEOUT: "{{ local_dev_k3d_wait_timeout | default('180s') }}"
+    DEV_MIN_FREE_GIB: "{{ local_dev_min_free_gib | default('80') }}"
+    DEV_MIN_FREE_PERCENT: "{{ local_dev_min_free_percent | default('8') }}"
+    DEV_SKIP_DISK_PREFLIGHT: "{{ (local_dev_skip_disk_preflight | default(false) | bool) | string | lower }}"
   changed_when: "'Creating k3d cluster' in local_dev_cluster_up.stdout"
   register: local_dev_cluster_up
   when: local_dev_create_cluster_effective | bool
@@ -172,6 +175,10 @@
     WISEMAPPING_WAIT_TIMEOUT: "{{ local_dev_wisemapping_wait_timeout | default('10m') }}"
     LEANTIME_PROBE_HOST: "{{ local_dev_leantime_probe_host | default('projects.thekeepstudios.com') }}"
     LEANTIME_WAIT_TIMEOUT: "{{ local_dev_leantime_wait_timeout | default('10m') }}"
+    DEV_MIN_FREE_GIB: "{{ local_dev_min_free_gib | default('80') }}"
+    DEV_MIN_FREE_PERCENT: "{{ local_dev_min_free_percent | default('8') }}"
+    DEV_SKIP_DISK_PREFLIGHT: "{{ (local_dev_skip_disk_preflight | default(false) | bool) | string | lower }}"
+    DEV_SKIP_NODE_PRESSURE_PREFLIGHT: "{{ (local_dev_skip_node_pressure_preflight | default(false) | bool) | string | lower }}"
   changed_when: false
   when: local_dev_run_smoke_effective | bool
 

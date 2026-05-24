@@ -5,6 +5,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "${SCRIPT_DIR}")"
 cd "${PROJECT_ROOT}"
 
+# shellcheck source=scripts/dev-preflight.sh
+source "${SCRIPT_DIR}/dev-preflight.sh"
+
 CLUSTER_NAME="${K3D_CLUSTER_NAME:-thekeep-dev}"
 OPEN_BROWSER="${DEV_OBSERVE_OPEN:-true}"
 CAPTURE_BROWSER="${DEV_OBSERVE_CAPTURE:-true}"
@@ -45,9 +48,13 @@ ensure_context() {
   require_cmd kubectl
   require_cmd curl
 
+  dev_preflight_check_disk "${PROJECT_ROOT}"
+
   if command -v k3d >/dev/null 2>&1 && k3d cluster get "${CLUSTER_NAME}" >/dev/null 2>&1; then
     kubectl config use-context "k3d-${CLUSTER_NAME}" >/dev/null
   fi
+
+  dev_preflight_check_kubernetes_node_pressure
 }
 
 app_config() {

@@ -14,6 +14,8 @@ The local path has three layers:
 - `kubectl`
 - `k3d`
 - `ansible-playbook`
+- Enough free disk for k3d image storage and local PVCs. The default preflight
+  requires at least 80 GiB and 8% free on the repo filesystem.
 - Optional: `kubeconform` or `kubeval` for stricter rendered manifest validation.
 
 ## Static Checks
@@ -112,6 +114,24 @@ K3D_IMAGE=rancher/k3s:v1.35.3-k3s1
 
 Override any of those values in the environment if a workstation needs a different k3s image.
 
+The local scripts fail early when the workstation is low on disk or when the
+k3d node already has `disk-pressure`, `memory-pressure`, or `pid-pressure`
+taints. k3d/k3s uses the host filesystem as node ephemeral storage, so a nearly
+full workstation can cause Kubernetes to evict otherwise healthy local app pods.
+
+For constrained single-app testing, lower the disk guard explicitly:
+
+```bash
+DEV_MIN_FREE_GIB=50 scripts/dev-smoke.sh wisemapping
+```
+
+Skip the guard only when you intentionally want to continue against a degraded
+local cluster:
+
+```bash
+DEV_SKIP_DISK_PREFLIGHT=true DEV_SKIP_NODE_PRESSURE_PREFLIGHT=true scripts/dev-smoke.sh platform
+```
+
 ## App Smoke Tests
 
 Use the generic target-based smoke entrypoint:
@@ -205,6 +225,23 @@ The artifacts include:
 This gives both a human inspection path and a shareable artifact path for agent/debug review.
 
 The config patches are local-cluster only. They prevent the browser from following production base URLs while inspecting apps through localhost port-forwards.
+
+If a page loaded and then stops loading, first check whether the observe command
+is still running. The localhost URLs depend on its port-forwards. If the command
+is still running but pods are `Pending` or `Unknown`, check node pressure:
+
+```bash
+kubectl get nodes
+kubectl describe node k3d-thekeep-dev-server-0 | grep -A8 '^Taints:\|^Conditions:'
+```
+
+If the node is under disk pressure, free host disk space and recreate the
+disposable local cluster:
+
+```bash
+scripts/dev-cluster-down.sh
+scripts/dev-smoke.sh platform
+```
 
 For a non-interactive capture that exits immediately:
 

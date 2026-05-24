@@ -18,6 +18,11 @@ local_dev_k3d_install_url: "https://raw.githubusercontent.com/k3d-io/k3d/main/in
 local_dev_cluster_name: thekeep-dev
 local_dev_k3s_version: "v1.35.3+k3s1"
 local_dev_k3d_wait_timeout: 180s
+local_dev_min_free_gib: 80
+local_dev_min_free_percent: 8
+# Set these only when intentionally testing on a constrained/degraded machine.
+local_dev_skip_disk_preflight: false
+local_dev_skip_node_pressure_preflight: false
 
 local_dev_run_static_checks: true
 local_dev_include_remote_kustomize: false

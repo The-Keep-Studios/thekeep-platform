@@ -5,6 +5,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "${SCRIPT_DIR}")"
 cd "${PROJECT_ROOT}"
 
+# shellcheck source=scripts/dev-preflight.sh
+source "${SCRIPT_DIR}/dev-preflight.sh"
+
 CLUSTER_NAME="${K3D_CLUSTER_NAME:-thekeep-dev}"
 PROBE_IMAGE="${DEV_PROBE_IMAGE:-curlimages/curl:8.8.0}"
 DEFAULT_WAIT_TIMEOUT="${DEV_WAIT_TIMEOUT:-10m}"
@@ -21,11 +24,15 @@ ensure_cluster() {
   require_cmd k3d
   require_cmd kubectl
 
+  dev_preflight_check_disk "${PROJECT_ROOT}"
+
   if ! k3d cluster get "${CLUSTER_NAME}" >/dev/null 2>&1; then
     "${SCRIPT_DIR}/dev-cluster-up.sh"
   else
     kubectl config use-context "k3d-${CLUSTER_NAME}" >/dev/null
   fi
+
+  dev_preflight_check_kubernetes_node_pressure
 }
 
 diagnostics_wisemapping() {

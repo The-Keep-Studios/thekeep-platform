@@ -5,6 +5,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "${SCRIPT_DIR}")"
 cd "${PROJECT_ROOT}"
 
+# shellcheck source=scripts/dev-preflight.sh
+source "${SCRIPT_DIR}/dev-preflight.sh"
+
 CLUSTER_NAME="${K3D_CLUSTER_NAME:-thekeep-dev}"
 K3S_VERSION="${K3S_VERSION:-v1.35.3+k3s1}"
 K3D_IMAGE="${K3D_IMAGE:-rancher/k3s:${K3S_VERSION/+/-}}"
@@ -20,6 +23,8 @@ require_cmd() {
 
 require_cmd k3d
 require_cmd kubectl
+
+dev_preflight_check_disk "${PROJECT_ROOT}"
 
 if k3d cluster get "${CLUSTER_NAME}" >/dev/null 2>&1; then
   echo "k3d cluster already exists: ${CLUSTER_NAME}"
