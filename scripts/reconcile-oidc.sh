@@ -41,6 +41,7 @@ OIDC_CLIENT_ID="${OIDC_CLIENT_ID:-}"
 OIDC_CLIENT_SECRET="${OIDC_CLIENT_SECRET:-}"
 
 WISEMAPPING_OAUTH_ENABLED="${WISEMAPPING_OAUTH_ENABLED:-false}"
+WISEMAPPING_SPRING_PROFILES_ACTIVE="${WISEMAPPING_SPRING_PROFILES_ACTIVE:-}"
 OAUTH_GOOGLE_CLIENT_ID="${OAUTH_GOOGLE_CLIENT_ID:-}"
 OAUTH_GOOGLE_CLIENT_SECRET="${OAUTH_GOOGLE_CLIENT_SECRET:-}"
 OAUTH_GOOGLE_ISSUER_URI="${OAUTH_GOOGLE_ISSUER_URI:-}"
@@ -61,6 +62,7 @@ if [ "${WISEMAPPING_OAUTH_ENABLED}" = "true" ]; then
   require_var OAUTH_GOOGLE_CLIENT_ID
   require_var OAUTH_GOOGLE_CLIENT_SECRET
   require_var OAUTH_GOOGLE_ISSUER_URI
+  WISEMAPPING_SPRING_PROFILES_ACTIVE="${WISEMAPPING_SPRING_PROFILES_ACTIVE:-oidc}"
 fi
 
 kadmin() {
@@ -98,7 +100,7 @@ if ! kadmin get secret wisemapping-secrets -n wisemapping >/dev/null 2>&1; then
   exit 1
 fi
 echo "Patching Wisemapping OAuth values in existing secret..."
-kadmin patch secret wisemapping-secrets -n wisemapping --type merge -p "{\"stringData\":{\"WISEMAPPING_OAUTH_ENABLED\":\"${WISEMAPPING_OAUTH_ENABLED}\",\"OAUTH_GOOGLE_CLIENT_ID\":\"${OAUTH_GOOGLE_CLIENT_ID}\",\"OAUTH_GOOGLE_CLIENT_SECRET\":\"${OAUTH_GOOGLE_CLIENT_SECRET}\",\"OAUTH_GOOGLE_ISSUER_URI\":\"${OAUTH_GOOGLE_ISSUER_URI}\"}}"
+kadmin patch secret wisemapping-secrets -n wisemapping --type merge -p "{\"stringData\":{\"WISEMAPPING_OAUTH_ENABLED\":\"${WISEMAPPING_OAUTH_ENABLED}\",\"SPRING_PROFILES_ACTIVE\":\"${WISEMAPPING_SPRING_PROFILES_ACTIVE}\",\"OAUTH_GOOGLE_CLIENT_ID\":\"${OAUTH_GOOGLE_CLIENT_ID}\",\"OAUTH_GOOGLE_CLIENT_SECRET\":\"${OAUTH_GOOGLE_CLIENT_SECRET}\",\"OAUTH_GOOGLE_ISSUER_URI\":\"${OAUTH_GOOGLE_ISSUER_URI}\"}}"
 
 echo "Restarting app deployments to consume new env secrets..."
 kadmin rollout restart deployment/leantime

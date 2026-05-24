@@ -18,10 +18,13 @@ data:
         password: "${WISEMAPPING_POSTGRES_PASSWORD}"
       jpa:
         hibernate:
-          ddl-auto: "update"
+          ddl-auto: "validate"
         properties:
           hibernate:
             dialect: "org.hibernate.dialect.PostgreSQLDialect"
+      sql:
+        init:
+          platform: "postgresql"
     app:
       site:
         ui-base-url: "https://mindmaps.thekeepstudios.com"
@@ -32,16 +35,22 @@ data:
       oauth:
         token:
           secret: "${WISEMAPPING_OAUTH_TOKEN_SECRET}"
-      security:
-        oauth2:
-          google:
-            enabled: ${WISEMAPPING_OAUTH_ENABLED:false}
-            clientId: "${OAUTH_GOOGLE_CLIENT_ID:}"
-            clientSecret: "${OAUTH_GOOGLE_CLIENT_SECRET:}"
       dialog:
         registration:
           enabled: true
           email-confirmation-enabled: true
+    ---
+    spring:
+      config:
+        activate:
+          on-profile: "oidc"
+    app:
+      security:
+        oauth2:
+          google:
+            enabled: true
+            clientId: "${OAUTH_GOOGLE_CLIENT_ID}"
+            clientSecret: "${OAUTH_GOOGLE_CLIENT_SECRET}"
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
@@ -144,6 +153,8 @@ spec:
     metadata:
       labels:
         app: wisemapping
+      annotations:
+        app.kubernetes.io/config-version: "wisemapping-postgres-oidc-profile-v1"
     spec:
       containers:
       - name: wisemapping

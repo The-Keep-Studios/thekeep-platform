@@ -1,0 +1,20 @@
+- name: Setup local development environment
+  hosts: local
+  gather_facts: true
+  become: false
+  pre_tasks:
+    - name: Check for optional dev vars file
+      ansible.builtin.stat:
+        path: "{{ playbook_dir }}/dev_vars.yml"
+      register: dev_vars_stat
+      tags: [always]
+
+    - name: Load optional dev vars file
+      ansible.builtin.include_vars:
+        file: "{{ playbook_dir }}/dev_vars.yml"
+      when: dev_vars_stat.stat.exists
+      tags: [always]
+
+  roles:
+    - role: dev_workstation
+      tags: [dev]

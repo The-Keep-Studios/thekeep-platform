@@ -313,6 +313,7 @@
         WISEMAPPING_JWT_SECRET: "{{ platform_secrets.wisemapping_jwt_secret }}"
         WISEMAPPING_OAUTH_TOKEN_SECRET: "{{ platform_secrets.wisemapping_oauth_token_secret }}"
         WISEMAPPING_OAUTH_ENABLED: "{{ (platform_oidc.wisemapping.enable | default(false) | bool) | string | lower }}"
+        SPRING_PROFILES_ACTIVE: "{{ 'oidc' if (platform_oidc.wisemapping.enable | default(false) | bool) else '' }}"
         OAUTH_GOOGLE_CLIENT_ID: "{{ platform_oidc.wisemapping.google_client_id | default('') }}"
         OAUTH_GOOGLE_CLIENT_SECRET: "{{ platform_oidc.wisemapping.google_client_secret | default('') }}"
         OAUTH_GOOGLE_ISSUER_URI: "{{ platform_oidc.wisemapping.google_issuer_uri | default('') }}"
