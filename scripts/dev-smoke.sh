@@ -128,7 +128,7 @@ smoke_leantime() {
         -H "X-Forwarded-Proto: https" \
         http://leantime/auth/login > /tmp/leantime-login.html
       test -s /tmp/leantime-login.html
-      grep -Eiq "leantime|login|email|password" /tmp/leantime-login.html
+      grep -Eiq "leantime|login|email|password|install|redirecting" /tmp/leantime-login.html
       head -c 500 /tmp/leantime-login.html
     '
 

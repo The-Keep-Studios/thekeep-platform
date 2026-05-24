@@ -174,6 +174,10 @@ Host: projects.thekeepstudios.com
 X-Forwarded-Proto: https
 ```
 
+In a fresh local database, Leantime may redirect the login path to `/install`.
+That is accepted by the smoke and observation probes because it still proves the
+local app is serving a real first-run page.
+
 The dev secrets are intentionally deterministic so repeated runs do not desync apps from existing local database PVCs. Override them only when you are also deleting the dev cluster or PVC:
 
 ```bash

@@ -78,7 +78,7 @@ app_config() {
       APP_PORT="${LEANTIME_OBSERVE_PORT:-18080}"
       APP_HOST="${LEANTIME_PROBE_HOST:-projects.thekeepstudios.com}"
       APP_PROBE_PATH="/auth/login"
-      APP_PROBE_PATTERN="leantime|login|email|password"
+      APP_PROBE_PATTERN="leantime|login|email|password|install|redirecting"
       APP_CONFIG_KIND="leantime"
       ;;
     *)
