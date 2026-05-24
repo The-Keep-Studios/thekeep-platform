@@ -2,10 +2,11 @@
 
 This repo should catch infrastructure breakage before changes hit the live k3s cluster.
 
-The local path has two layers:
+The local path has three layers:
 
 1. Static checks that do not need a cluster.
 2. A disposable k3d cluster for workload smoke tests.
+3. Browser observation against the running local app.
 
 ## Prerequisites
 
@@ -47,12 +48,12 @@ Use the Ansible entrypoint when you want one command to prepare and validate a l
 ansible-playbook -i ansible/inventory.ini ansible/setup_dev_environment.yml
 ```
 
-By default this runs the `wisemapping` profile:
+By default this runs the `platform` profile:
 
 - static IaC checks;
 - Docker/k3d preflight checks;
 - local k3d cluster creation or reuse;
-- WiseMapping smoke test.
+- app smoke tests.
 
 If `k3d` is not installed, either install it yourself or allow Ansible to install it with the upstream k3d install script:
 
@@ -68,6 +69,15 @@ For static checks only:
 ```bash
 ansible-playbook -i ansible/inventory.ini ansible/setup_dev_environment.yml \
   -e local_dev_profile=static
+```
+
+Supported profiles:
+
+```text
+static       Static IaC checks only.
+wisemapping  Static checks, k3d cluster, WiseMapping smoke test.
+leantime     Static checks, k3d cluster, Leantime smoke test.
+platform     Static checks, k3d cluster, all local app smoke tests.
 ```
 
 For workstation-specific overrides:
@@ -102,21 +112,33 @@ K3D_IMAGE=rancher/k3s:v1.35.3-k3s1
 
 Override any of those values in the environment if a workstation needs a different k3s image.
 
-## WiseMapping Smoke Test
+## App Smoke Tests
 
-Run:
+Use the generic target-based smoke entrypoint:
+
+```bash
+scripts/dev-smoke.sh wisemapping
+scripts/dev-smoke.sh leantime
+scripts/dev-smoke.sh platform
+```
+
+Compatibility wrappers are also available:
 
 ```bash
 scripts/dev-wisemapping-smoke.sh
+scripts/dev-leantime-smoke.sh
+scripts/dev-platform-smoke.sh
 ```
 
-The smoke test:
+The smoke scripts:
 
 - Creates the disposable k3d cluster if it does not exist.
-- Creates stable dev-only WiseMapping secrets.
-- Applies `kubernetes/apps/wisemapping`.
-- Waits for Postgres and WiseMapping rollouts.
-- Probes `http://wisemapping/api/restful/app/config` from inside the cluster with:
+- Create stable dev-only secrets for the target app.
+- Apply the app manifests.
+- Wait for database and app rollouts.
+- Probe an app-specific endpoint from inside the cluster.
+
+WiseMapping probes `http://wisemapping/api/restful/app/config` with:
 
 ```text
 Host: mindmaps.thekeepstudios.com
@@ -125,52 +147,78 @@ X-Forwarded-Proto: https
 
 That endpoint is intentionally used because the WiseMapping nginx frontend can serve `/` even when the Spring API process is down.
 
-The dev secrets are intentionally deterministic so repeated runs do not desync the app from an existing local Postgres PVC. Override them only when you are also deleting the dev cluster or PVC:
+Leantime probes `http://leantime/auth/login` with:
+
+```text
+Host: projects.thekeepstudios.com
+X-Forwarded-Proto: https
+```
+
+The dev secrets are intentionally deterministic so repeated runs do not desync apps from existing local database PVCs. Override them only when you are also deleting the dev cluster or PVC:
 
 ```bash
 WISEMAPPING_DEV_POSTGRES_PASSWORD=dev-pass scripts/dev-wisemapping-smoke.sh
+LEANTIME_DEV_DB_PASSWORD=dev-pass scripts/dev-leantime-smoke.sh
 ```
 
-## WiseMapping Manual Observation
+## App Manual Observation
 
-After the smoke test passes, open the actual running app:
+After smoke tests pass, open the actual running app:
+
+```bash
+scripts/dev-observe.sh wisemapping
+scripts/dev-observe.sh leantime
+scripts/dev-observe.sh platform
+```
+
+Compatibility wrappers are also available:
 
 ```bash
 scripts/dev-wisemapping-observe.sh
+scripts/dev-leantime-observe.sh
+scripts/dev-platform-observe.sh
 ```
 
-This script:
+The observe scripts:
 
-- patches the local dev cluster's WiseMapping config to use `http://localhost:18081` as the UI/API base URL;
-- port-forwards the local k3d WiseMapping service to `http://localhost:18081`;
-- verifies `/api/restful/app/config` through the port-forward;
-- opens the app in your desktop browser when `xdg-open` is available;
-- captures browser artifacts under `.artifacts/wisemapping-observe/`.
+- patch local dev-cluster app config to a localhost base URL where needed;
+- port-forward the target service;
+- verify an app-specific probe path through the port-forward;
+- open the app in your desktop browser when `xdg-open` is available;
+- capture browser artifacts under `.artifacts/dev-observe/`.
+
+Default local URLs:
+
+```text
+WiseMapping: http://localhost:18081
+Leantime:    http://localhost:18080
+```
 
 The artifacts include:
 
-- `api-config.json`
-- `wisemapping-home.png`
-- `wisemapping-home.html`
+- `probe-response.html`
+- `<target>-home.png`
+- `<target>-home.html`
 - Chromium capture logs when Chromium is available
 - `port-forward.log`
 
 This gives both a human inspection path and a shareable artifact path for agent/debug review.
 
-The config patch is local-cluster only. It prevents the browser from following WiseMapping's production base URL while inspecting the app through a localhost port-forward.
+The config patches are local-cluster only. They prevent the browser from following production base URLs while inspecting apps through localhost port-forwards.
 
 For a non-interactive capture that exits immediately:
 
 ```bash
-WISEMAPPING_OBSERVE_OPEN=false WISEMAPPING_OBSERVE_HOLD=false scripts/dev-wisemapping-observe.sh
+DEV_OBSERVE_OPEN=false DEV_OBSERVE_HOLD=false scripts/dev-observe.sh platform
 ```
 
 Useful overrides:
 
 ```bash
-WISEMAPPING_OBSERVE_PORT=18082 scripts/dev-wisemapping-observe.sh
-WISEMAPPING_OBSERVE_ARTIFACT_DIR=/tmp/wisemapping-observe scripts/dev-wisemapping-observe.sh
-WISEMAPPING_OBSERVE_PATCH_CONFIG=false scripts/dev-wisemapping-observe.sh
+WISEMAPPING_OBSERVE_PORT=18082 scripts/dev-observe.sh wisemapping
+LEANTIME_OBSERVE_PORT=18083 scripts/dev-observe.sh leantime
+DEV_OBSERVE_ARTIFACT_ROOT=/tmp/platform-observe scripts/dev-observe.sh platform
+DEV_OBSERVE_PATCH_CONFIG=false scripts/dev-observe.sh wisemapping
 ```
 
 ## Limits

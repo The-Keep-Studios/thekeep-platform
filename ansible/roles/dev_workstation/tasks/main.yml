@@ -1,13 +1,13 @@
 - name: Normalize local development profile
   ansible.builtin.set_fact:
-    local_dev_effective_profile: "{{ local_dev_profile | default('wisemapping') }}"
+    local_dev_effective_profile: "{{ local_dev_profile | default('platform') }}"
   tags: [always]
 
 - name: Validate local development profile
   ansible.builtin.assert:
     that:
-      - local_dev_effective_profile in ['static', 'wisemapping']
-    fail_msg: "local_dev_profile must be one of: static, wisemapping."
+      - local_dev_effective_profile in ['static', 'wisemapping', 'leantime', 'platform']
+    fail_msg: "local_dev_profile must be one of: static, wisemapping, leantime, platform."
   tags: [always]
 
 - name: Apply local development profile defaults
@@ -15,11 +15,16 @@
     local_dev_run_static_checks_effective: "{{ local_dev_run_static_checks | default(true) | bool }}"
     local_dev_create_cluster_effective: >-
       {{
-        (local_dev_create_cluster | default(local_dev_effective_profile == 'wisemapping')) | bool
+        (local_dev_create_cluster | default(local_dev_effective_profile != 'static')) | bool
       }}
-    local_dev_run_wisemapping_smoke_effective: >-
+    local_dev_run_smoke_effective: >-
       {{
-        (local_dev_run_wisemapping_smoke | default(local_dev_effective_profile == 'wisemapping')) | bool
+        (local_dev_run_smoke | default(local_dev_effective_profile != 'static')) | bool
+      }}
+    local_dev_smoke_target_effective: >-
+      {{
+        local_dev_smoke_target |
+        default('platform' if local_dev_effective_profile == 'static' else local_dev_effective_profile)
       }}
   tags: [always]
 
@@ -50,7 +55,7 @@
   failed_when: false
   when: >
     (local_dev_create_cluster_effective | bool) or
-    (local_dev_run_wisemapping_smoke_effective | bool)
+    (local_dev_run_smoke_effective | bool)
 
 - name: Fail if Docker CLI is missing for local cluster tests
   ansible.builtin.fail:
@@ -58,7 +63,7 @@
       Missing required local command: docker. Install and start Docker or a compatible
       container runtime before running the local k3d development environment.
   when:
-    - (local_dev_create_cluster_effective | bool) or (local_dev_run_wisemapping_smoke_effective | bool)
+    - (local_dev_create_cluster_effective | bool) or (local_dev_run_smoke_effective | bool)
     - local_dev_docker_command_check.rc != 0
 
 - name: Check Docker daemon access for local cluster tests
@@ -71,7 +76,7 @@
   failed_when: false
   when: >
     (local_dev_create_cluster_effective | bool) or
-    (local_dev_run_wisemapping_smoke_effective | bool)
+    (local_dev_run_smoke_effective | bool)
 
 - name: Fail if Docker daemon is unavailable
   ansible.builtin.fail:
@@ -80,7 +85,7 @@
       your user can run `docker info` without sudo.
       stderr={{ local_dev_docker_info.stderr | default('') | trim | default('none', true) }}
   when:
-    - (local_dev_create_cluster_effective | bool) or (local_dev_run_wisemapping_smoke_effective | bool)
+    - (local_dev_create_cluster_effective | bool) or (local_dev_run_smoke_effective | bool)
     - local_dev_docker_info.rc != 0
 
 - name: Check k3d command
@@ -90,7 +95,7 @@
   failed_when: false
   when: >
     (local_dev_create_cluster_effective | bool) or
-    (local_dev_run_wisemapping_smoke_effective | bool)
+    (local_dev_run_smoke_effective | bool)
 
 - name: Download k3d installer when requested
   ansible.builtin.get_url:
@@ -98,7 +103,7 @@
     dest: /tmp/k3d-install.sh
     mode: "0755"
   when:
-    - ((local_dev_create_cluster_effective | bool) or (local_dev_run_wisemapping_smoke_effective | bool))
+    - ((local_dev_create_cluster_effective | bool) or (local_dev_run_smoke_effective | bool))
     - local_dev_k3d_command_check.rc != 0
     - local_dev_install_k3d | default(false) | bool
 
@@ -113,7 +118,7 @@
   args:
     creates: /usr/local/bin/k3d
   when:
-    - ((local_dev_create_cluster_effective | bool) or (local_dev_run_wisemapping_smoke_effective | bool))
+    - ((local_dev_create_cluster_effective | bool) or (local_dev_run_smoke_effective | bool))
     - local_dev_k3d_command_check.rc != 0
     - local_dev_install_k3d | default(false) | bool
 
@@ -124,7 +129,7 @@
   failed_when: false
   when: >
     (local_dev_create_cluster_effective | bool) or
-    (local_dev_run_wisemapping_smoke_effective | bool)
+    (local_dev_run_smoke_effective | bool)
 
 - name: Fail if k3d is missing for local cluster tests
   ansible.builtin.fail:
@@ -132,7 +137,7 @@
       Missing required local command: k3d. Install k3d or rerun with
       `-K -e local_dev_install_k3d=true` to let Ansible install it using the k3d installer.
   when:
-    - (local_dev_create_cluster_effective | bool) or (local_dev_run_wisemapping_smoke_effective | bool)
+    - (local_dev_create_cluster_effective | bool) or (local_dev_run_smoke_effective | bool)
     - local_dev_k3d_command_recheck.rc != 0
 
 - name: Run local static IaC checks
@@ -156,16 +161,19 @@
   register: local_dev_cluster_up
   when: local_dev_create_cluster_effective | bool
 
-- name: Run WiseMapping smoke test on local k3d cluster
+- name: Run application smoke test on local k3d cluster
   ansible.builtin.command:
     argv:
-      - "{{ playbook_dir }}/../scripts/dev-wisemapping-smoke.sh"
+      - "{{ playbook_dir }}/../scripts/dev-smoke.sh"
+      - "{{ local_dev_smoke_target_effective }}"
   environment:
     K3D_CLUSTER_NAME: "{{ local_dev_cluster_name | default('thekeep-dev') }}"
     WISEMAPPING_PROBE_HOST: "{{ local_dev_wisemapping_probe_host | default('mindmaps.thekeepstudios.com') }}"
     WISEMAPPING_WAIT_TIMEOUT: "{{ local_dev_wisemapping_wait_timeout | default('10m') }}"
+    LEANTIME_PROBE_HOST: "{{ local_dev_leantime_probe_host | default('projects.thekeepstudios.com') }}"
+    LEANTIME_WAIT_TIMEOUT: "{{ local_dev_leantime_wait_timeout | default('10m') }}"
   changed_when: false
-  when: local_dev_run_wisemapping_smoke_effective | bool
+  when: local_dev_run_smoke_effective | bool
 
 - name: Report local development environment commands
   ansible.builtin.debug:
@@ -173,6 +181,7 @@
       - "Local development profile completed: {{ local_dev_effective_profile }}"
       - "Cluster: {{ local_dev_cluster_name | default('thekeep-dev') }}"
       - "Static checks: scripts/test-iac-static.sh"
-      - "WiseMapping smoke: scripts/dev-wisemapping-smoke.sh"
-      - "WiseMapping observe: scripts/dev-wisemapping-observe.sh"
+      - "Smoke target: {{ local_dev_smoke_target_effective }}"
+      - "Smoke command: scripts/dev-smoke.sh {{ local_dev_smoke_target_effective }}"
+      - "Observe command: scripts/dev-observe.sh {{ local_dev_smoke_target_effective }}"
       - "Cleanup: scripts/dev-cluster-down.sh"

@@ -5,7 +5,9 @@
 # Profiles:
 #   static       Run local static IaC checks only.
 #   wisemapping  Run static checks, create/reuse k3d, and smoke-test WiseMapping.
-local_dev_profile: wisemapping
+#   leantime     Run static checks, create/reuse k3d, and smoke-test Leantime.
+#   platform     Run static checks, create/reuse k3d, and smoke-test local app targets.
+local_dev_profile: platform
 
 # Installing k3d writes to /usr/local/bin and requires:
 #   ansible-playbook -K -i ansible/inventory.ini ansible/setup_dev_environment.yml -e local_dev_install_k3d=true
@@ -20,7 +22,12 @@ local_dev_k3d_wait_timeout: 180s
 local_dev_run_static_checks: true
 local_dev_include_remote_kustomize: false
 local_dev_create_cluster: true
-local_dev_run_wisemapping_smoke: true
+local_dev_run_smoke: true
+# Defaults to local_dev_profile. Useful when you want a named profile but a
+# different smoke target.
+# local_dev_smoke_target: platform
 
 local_dev_wisemapping_probe_host: mindmaps.thekeepstudios.com
 local_dev_wisemapping_wait_timeout: 10m
+local_dev_leantime_probe_host: projects.thekeepstudios.com
+local_dev_leantime_wait_timeout: 10m

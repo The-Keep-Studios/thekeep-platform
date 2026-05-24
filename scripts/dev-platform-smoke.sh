@@ -2,4 +2,4 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-exec "${SCRIPT_DIR}/dev-observe.sh" wisemapping "$@"
+exec "${SCRIPT_DIR}/dev-smoke.sh" platform "$@"
