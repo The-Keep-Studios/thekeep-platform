@@ -7,7 +7,7 @@ spec:
   project: platform
   source:
     repoURL: "https://github.com/The-Keep-Studios/thekeep-platform.git"
-    targetRevision: "feature/wisemapping-recovery"
+    targetRevision: "main"
     path: kubernetes/platform/cloudflared
   destination:
     server: https://kubernetes.default.svc
@@ -28,7 +28,7 @@ spec:
   project: platform
   source:
     repoURL: "https://github.com/The-Keep-Studios/thekeep-platform.git"
-    targetRevision: "feature/wisemapping-recovery"
+    targetRevision: "main"
     path: kubernetes/platform/authentik
   destination:
     server: https://kubernetes.default.svc
@@ -50,7 +50,7 @@ spec:
   project: platform
   source:
     repoURL: "https://github.com/The-Keep-Studios/thekeep-platform.git"
-    targetRevision: "feature/wisemapping-recovery"
+    targetRevision: "main"
     path: kubernetes/apps/leantime
   destination:
     server: https://kubernetes.default.svc
@@ -72,7 +72,7 @@ spec:
   project: platform
   source:
     repoURL: "https://github.com/The-Keep-Studios/thekeep-platform.git"
-    targetRevision: "feature/wisemapping-recovery"
+    targetRevision: "main"
     path: kubernetes/apps/wisemapping
   destination:
     server: https://kubernetes.default.svc
@@ -101,10 +101,10 @@ spec:
       valueFiles:
       - $values/kubernetes/platform/monitoring/kube-prometheus-stack.values.yaml
   - repoURL: "https://github.com/The-Keep-Studios/thekeep-platform.git"
-    targetRevision: "feature/wisemapping-recovery"
+    targetRevision: "main"
     ref: values
   - repoURL: "https://github.com/The-Keep-Studios/thekeep-platform.git"
-    targetRevision: "feature/wisemapping-recovery"
+    targetRevision: "main"
     path: kubernetes/platform/monitoring/access
   destination:
     server: https://kubernetes.default.svc
@@ -140,7 +140,7 @@ spec:
       valueFiles:
       - $values/kubernetes/platform/monitoring/promtail.values.yaml
   - repoURL: "https://github.com/The-Keep-Studios/thekeep-platform.git"
-    targetRevision: "feature/wisemapping-recovery"
+    targetRevision: "main"
     ref: values
   destination:
     server: https://kubernetes.default.svc
