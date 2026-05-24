@@ -174,4 +174,5 @@
       - "Cluster: {{ local_dev_cluster_name | default('thekeep-dev') }}"
       - "Static checks: scripts/test-iac-static.sh"
       - "WiseMapping smoke: scripts/dev-wisemapping-smoke.sh"
+      - "WiseMapping observe: scripts/dev-wisemapping-observe.sh"
       - "Cleanup: scripts/dev-cluster-down.sh"

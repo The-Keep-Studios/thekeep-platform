@@ -131,6 +131,48 @@ The dev secrets are intentionally deterministic so repeated runs do not desync t
 WISEMAPPING_DEV_POSTGRES_PASSWORD=dev-pass scripts/dev-wisemapping-smoke.sh
 ```
 
+## WiseMapping Manual Observation
+
+After the smoke test passes, open the actual running app:
+
+```bash
+scripts/dev-wisemapping-observe.sh
+```
+
+This script:
+
+- patches the local dev cluster's WiseMapping config to use `http://localhost:18081` as the UI/API base URL;
+- port-forwards the local k3d WiseMapping service to `http://localhost:18081`;
+- verifies `/api/restful/app/config` through the port-forward;
+- opens the app in your desktop browser when `xdg-open` is available;
+- captures browser artifacts under `.artifacts/wisemapping-observe/`.
+
+The artifacts include:
+
+- `api-config.json`
+- `wisemapping-home.png`
+- `wisemapping-home.html`
+- Chromium capture logs when Chromium is available
+- `port-forward.log`
+
+This gives both a human inspection path and a shareable artifact path for agent/debug review.
+
+The config patch is local-cluster only. It prevents the browser from following WiseMapping's production base URL while inspecting the app through a localhost port-forward.
+
+For a non-interactive capture that exits immediately:
+
+```bash
+WISEMAPPING_OBSERVE_OPEN=false WISEMAPPING_OBSERVE_HOLD=false scripts/dev-wisemapping-observe.sh
+```
+
+Useful overrides:
+
+```bash
+WISEMAPPING_OBSERVE_PORT=18082 scripts/dev-wisemapping-observe.sh
+WISEMAPPING_OBSERVE_ARTIFACT_DIR=/tmp/wisemapping-observe scripts/dev-wisemapping-observe.sh
+WISEMAPPING_OBSERVE_PATCH_CONFIG=false scripts/dev-wisemapping-observe.sh
+```
+
 ## Limits
 
 This local path does not replace production validation.
