@@ -35,6 +35,13 @@ data:
       oauth:
         token:
           secret: "${WISEMAPPING_OAUTH_TOKEN_SECRET}"
+      mail:
+        sender-email: "${WISEMAPPING_MAIL_SENDER_EMAIL:}"
+        enabled: ${WISEMAPPING_MAIL_ENABLED:false}
+        host: "${WISEMAPPING_MAIL_HOST:}"
+        port: ${WISEMAPPING_MAIL_PORT:587}
+        username: "${WISEMAPPING_MAIL_USERNAME:}"
+        password: "${WISEMAPPING_MAIL_PASSWORD:}"
       dialog:
         registration:
           enabled: true
@@ -163,6 +170,9 @@ spec:
         envFrom:
         - secretRef:
             name: wisemapping-secrets
+        - secretRef:
+            name: wisemapping-email
+            optional: true
         ports:
         - name: http
           containerPort: 80
