@@ -55,3 +55,10 @@ platform_secrets:
 #     smtp_secure: "STARTTLS"
 #     smtp_ssl_noverify: false
 #     smtp_port: "587"
+#   wisemapping:
+#     sender_email: "noreply@mg.thekeepstudios.com"
+#     use_smtp: true
+#     smtp_host: "smtp.mailgun.org"
+#     smtp_port: "587"
+#     smtp_username: "postmaster@mg.thekeepstudios.com"
+#     smtp_password: "CHANGE_ME_MAILGUN_SMTP_PASSWORD"

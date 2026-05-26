@@ -172,6 +172,71 @@
         - leantime_email_return is search('[<>]')
       tags: [always]
 
+    - name: Define required WiseMapping SMTP settings
+      ansible.builtin.set_fact:
+        required_wisemapping_smtp_keys:
+          - sender_email
+          - smtp_host
+          - smtp_port
+          - smtp_username
+          - smtp_password
+      when: (platform_email.wisemapping | default({})).use_smtp | default(false) | bool
+      tags: [always]
+
+    - name: Detect missing required WiseMapping SMTP settings
+      ansible.builtin.set_fact:
+        missing_wisemapping_smtp_keys: >-
+          {{
+            required_wisemapping_smtp_keys |
+            difference((platform_email.wisemapping | default({})).keys() | list)
+          }}
+      when: (platform_email.wisemapping | default({})).use_smtp | default(false) | bool
+      tags: [always]
+
+    - name: Fail if required WiseMapping SMTP settings are missing
+      ansible.builtin.fail:
+        msg: "platform_email.wisemapping is missing required SMTP settings: {{ missing_wisemapping_smtp_keys | join(', ') }}"
+      when:
+        - (platform_email.wisemapping | default({})).use_smtp | default(false) | bool
+        - missing_wisemapping_smtp_keys | default([]) | length > 0
+      tags: [always]
+
+    - name: Fail if required WiseMapping SMTP settings are empty or placeholders
+      ansible.builtin.fail:
+        msg: "platform_email.wisemapping.{{ item }} is empty or still set to a placeholder value."
+      vars:
+        smtp_value: "{{ (platform_email.wisemapping | default({}))[item] | default('') | string }}"
+        normalized_smtp_value: "{{ smtp_value | trim | lower }}"
+      loop: "{{ required_wisemapping_smtp_keys | default([]) }}"
+      when: >
+        ((platform_email.wisemapping | default({})).use_smtp | default(false) | bool) and
+        (
+          (smtp_value | trim | length == 0) or
+          (normalized_smtp_value in production_placeholder_values) or
+          (normalized_smtp_value is match('^(change[_-]?me|replace[_-]?me|todo|example|your[_ -]?value|your[_ -]?secret)'))
+        )
+      tags: [always]
+
+    - name: Fail if WiseMapping SMTP port is not numeric
+      ansible.builtin.fail:
+        msg: "platform_email.wisemapping.smtp_port must be a numeric port."
+      vars:
+        wisemapping_smtp_port: "{{ (platform_email.wisemapping | default({})).smtp_port | default('') | string | trim }}"
+      when:
+        - (platform_email.wisemapping | default({})).use_smtp | default(false) | bool
+        - not (wisemapping_smtp_port is match('^[0-9]+$'))
+      tags: [always]
+
+    - name: Fail if WiseMapping sender address includes a display name
+      ansible.builtin.fail:
+        msg: "platform_email.wisemapping.sender_email must be a plain email address, not a display-name value like 'WiseMapping <noreply@example.com>'."
+      vars:
+        wisemapping_sender_email: "{{ (platform_email.wisemapping | default({})).sender_email | default('') | string | trim }}"
+      when:
+        - (platform_email.wisemapping | default({})).use_smtp | default(false) | bool
+        - wisemapping_sender_email is search('[<>]')
+      tags: [always]
+
     - name: Fail if direct origin URLs are missing while external HTTPS is required
       ansible.builtin.fail:
         msg: "direct_http_urls must be configured when require_external_https is true."

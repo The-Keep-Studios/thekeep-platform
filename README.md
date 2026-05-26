@@ -130,6 +130,40 @@ Target for full production:
 - Runtime secrets come from Kubernetes Secrets today and should evolve to external or encrypted secret management.
 - Deployments should assume eventual multi-node scheduling, even if the current cluster is single-node.
 
+### Developer Rules Of Thumb
+
+- Start with the purpose of the change: user value, business need, operational risk, or learning goal.
+- Git is the source of truth. Argo CD deploys what is committed and pushed to the configured GitOps revision.
+- Keep one branch focused on one operational concern. Do not mix hotfixes, feature work, experiments, and project-management artifacts.
+- Prefer small, boring, reversible changes that are easy to review.
+- Treat `ansible-playbook`, Argo CD syncs, and direct `kubectl` changes as live infrastructure operations.
+- Prefer durable changes in Ansible, Kubernetes manifests, or Helm values over manual cluster edits.
+- If a manual cluster action is required, document it and reconcile the lasting state back into Git.
+- Never commit production secrets. `ansible/production_vars.yml` is local-only and ignored by Git.
+- Avoid new production dependencies unless they are worth their long-term operational cost.
+- Test static rendering and local smoke paths before applying changes to production.
+- Make observability and rollback part of every service change, especially for public endpoints and stateful workloads.
+
+### Human And AI Collaboration
+
+- Humans own product intent, production risk, secrets, live approvals, and final merge decisions.
+- AI agents can inspect the repository, draft commands, edit reviewable files, and summarize evidence.
+- AI agents must ask before destructive commands, privileged operations, live cluster changes, or scripts that mutate external systems.
+- AI agents should preserve unrelated worktree changes and call out dirty state instead of cleaning it up.
+- Human and AI contributors should challenge requests when the proposed implementation does not match the actual goal or creates avoidable operational burden.
+- Prefer reviewable files, dry runs, and copy/paste commands over hidden automation for one-time operations.
+
+### Before Merging
+
+For infrastructure changes, confirm the relevant items before merging:
+
+- Static checks pass, such as `scripts/test-iac-static.sh` when it applies.
+- Ansible syntax or playbook checks were run for changed playbooks and roles.
+- Local k3d smoke or observation checks were run for app changes when practical.
+- GitOps manifests do not accidentally target a feature branch unless that is intentional for testing.
+- No secrets, tokens, passwords, kubeconfigs, or private keys are committed.
+- Rollout, validation, and rollback steps are clear enough for another engineer to follow.
+
 ## Operations Runbook
 
 This section keeps the operational detail out of the top-level overview while preserving the commands needed to run the platform.

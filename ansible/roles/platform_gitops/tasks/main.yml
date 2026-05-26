@@ -317,6 +317,15 @@
         OAUTH_GOOGLE_CLIENT_ID: "{{ platform_oidc.wisemapping.google_client_id | default('') }}"
         OAUTH_GOOGLE_CLIENT_SECRET: "{{ platform_oidc.wisemapping.google_client_secret | default('') }}"
         OAUTH_GOOGLE_ISSUER_URI: "{{ platform_oidc.wisemapping.google_issuer_uri | default('') }}"
+    - name: wisemapping-email
+      namespace: wisemapping
+      data:
+        WISEMAPPING_MAIL_ENABLED: "{{ ((platform_email.wisemapping | default({})).use_smtp | default(false) | bool) | string | lower }}"
+        WISEMAPPING_MAIL_SENDER_EMAIL: "{{ (platform_email.wisemapping | default({})).sender_email | default('') }}"
+        WISEMAPPING_MAIL_HOST: "{{ (platform_email.wisemapping | default({})).smtp_host | default('') }}"
+        WISEMAPPING_MAIL_PORT: "{{ (platform_email.wisemapping | default({})).smtp_port | default('587') | string }}"
+        WISEMAPPING_MAIL_USERNAME: "{{ (platform_email.wisemapping | default({})).smtp_username | default('') }}"
+        WISEMAPPING_MAIL_PASSWORD: "{{ (platform_email.wisemapping | default({})).smtp_password | default('') }}"
     - name: monitoring-basic-auth
       namespace: monitoring
       type: kubernetes.io/basic-auth
@@ -641,3 +650,104 @@
   when:
     - platform_email.leantime.use_smtp | default(false) | bool
     - leantime_email_config_state.stdout | default('') | trim != leantime_email_config_hash
+
+- name: Define WiseMapping email configuration hash
+  ansible.builtin.set_fact:
+    wisemapping_email_config_hash: >-
+      {{
+        {
+          'use_smtp': (platform_email.wisemapping | default({})).use_smtp | default(false) | bool,
+          'sender_email': (platform_email.wisemapping | default({})).sender_email | default(''),
+          'smtp_host': (platform_email.wisemapping | default({})).smtp_host | default(''),
+          'smtp_port': (platform_email.wisemapping | default({})).smtp_port | default('587') | string,
+          'smtp_username': (platform_email.wisemapping | default({})).smtp_username | default(''),
+          'smtp_password': (platform_email.wisemapping | default({})).smtp_password | default('')
+        } | to_json | hash('sha256')
+      }}
+  no_log: true
+  when: (platform_email.wisemapping | default({})).use_smtp | default(false) | bool
+
+- name: Read applied WiseMapping email configuration hash
+  ansible.builtin.command:
+    argv:
+      - "{{ platform_kubectl }}"
+      - get
+      - configmap
+      - wisemapping-email-config-state
+      - -n
+      - wisemapping
+      - -o
+      - "jsonpath={.data.hash}"
+  become: true
+  become_user: k3s-admin
+  environment: "{{ platform_kubectl_env }}"
+  register: wisemapping_email_config_state
+  changed_when: false
+  failed_when: false
+  when: (platform_email.wisemapping | default({})).use_smtp | default(false) | bool
+
+- name: Restart WiseMapping pods after email configuration changes
+  ansible.builtin.command:
+    argv:
+      - "{{ platform_kubectl }}"
+      - delete
+      - pod
+      - -l
+      - app=wisemapping
+      - -n
+      - wisemapping
+      - --ignore-not-found=true
+      - --wait=false
+  become: true
+  become_user: k3s-admin
+  environment: "{{ platform_kubectl_env }}"
+  when:
+    - (platform_email.wisemapping | default({})).use_smtp | default(false) | bool
+    - wisemapping_email_config_state.stdout | default('') | trim != wisemapping_email_config_hash
+
+- name: Persist WiseMapping email configuration hash
+  ansible.builtin.command:
+    argv:
+      - "{{ platform_kubectl }}"
+      - apply
+      - -f
+      - "-"
+  args:
+    stdin: >-
+      {{
+        {
+          'apiVersion': 'v1',
+          'kind': 'ConfigMap',
+          'metadata': {
+            'name': 'wisemapping-email-config-state',
+            'namespace': 'wisemapping'
+          },
+          'data': {
+            'hash': wisemapping_email_config_hash
+          }
+        } | to_nice_yaml
+      }}
+  become: true
+  become_user: k3s-admin
+  environment: "{{ platform_kubectl_env }}"
+  when:
+    - (platform_email.wisemapping | default({})).use_smtp | default(false) | bool
+    - wisemapping_email_config_state.stdout | default('') | trim != wisemapping_email_config_hash
+
+- name: Wait for WiseMapping after email configuration changes
+  ansible.builtin.command:
+    argv:
+      - "{{ platform_kubectl }}"
+      - rollout
+      - status
+      - deployment/wisemapping
+      - -n
+      - wisemapping
+      - --timeout=180s
+  become: true
+  become_user: k3s-admin
+  environment: "{{ platform_kubectl_env }}"
+  changed_when: false
+  when:
+    - (platform_email.wisemapping | default({})).use_smtp | default(false) | bool
+    - wisemapping_email_config_state.stdout | default('') | trim != wisemapping_email_config_hash

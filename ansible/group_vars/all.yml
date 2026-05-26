@@ -52,6 +52,8 @@ platform_oidc:
 platform_email:
   leantime:
     use_smtp: false
+  wisemapping:
+    use_smtp: false
 
 platform_validation_argo_app_status_retries: 60
 platform_validation_argo_app_status_delay: 10
