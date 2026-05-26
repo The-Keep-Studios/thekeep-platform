@@ -113,6 +113,16 @@ spec:
     requests:
       storage: 2Gi
 ---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: leantime-plugins-pvc
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 1Gi
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -198,6 +208,8 @@ spec:
         volumeMounts:
         - name: leantime-vol
           mountPath: /var/www/html/user/data
+        - name: leantime-plugins
+          mountPath: /var/www/html/app/Plugins
         resources:
           requests:
             cpu: "100m"
@@ -209,6 +221,9 @@ spec:
       - name: leantime-vol
         persistentVolumeClaim:
           claimName: leantime-app-pvc
+      - name: leantime-plugins
+        persistentVolumeClaim:
+          claimName: leantime-plugins-pvc
 ---
 apiVersion: v1
 kind: Service

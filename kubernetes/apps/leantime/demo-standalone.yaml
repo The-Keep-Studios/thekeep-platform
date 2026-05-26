@@ -10,6 +10,17 @@ spec:
       storage: 1Gi
 ---
 apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: leantime-plugins-data
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: v1
 kind: ConfigMap
 metadata:
   name: leantime-runtime-defaults
@@ -252,10 +263,15 @@ spec:
         volumeMounts:
         - name: leantime-vol
           mountPath: /var/www/html/user/data
+        - name: leantime-plugins
+          mountPath: /var/www/html/app/Plugins
       volumes:
       - name: leantime-vol
         persistentVolumeClaim:
           claimName: leantime-data
+      - name: leantime-plugins
+        persistentVolumeClaim:
+          claimName: leantime-plugins-data
 ---
 apiVersion: v1
 kind: Service
