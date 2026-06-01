@@ -88,6 +88,28 @@ spec:
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
+  name: platform-baserow
+  namespace: argocd
+spec:
+  project: platform
+  source:
+    repoURL: "{{ gitops_repo_url }}"
+    targetRevision: "{{ gitops_revision }}"
+    path: kubernetes/apps/baserow
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: baserow
+  syncPolicy:
+    automated:
+      prune: false
+      selfHeal: true
+    syncOptions:
+    - CreateNamespace=true
+    - ServerSideApply=true
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
   name: platform-monitoring-prometheus
   namespace: argocd
 spec:

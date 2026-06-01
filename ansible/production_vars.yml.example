@@ -51,6 +51,19 @@ platform_secrets:
 #     smtp_auth: true
 #     smtp_username: "postmaster@mg.thekeepstudios.com"
 #     smtp_password: "CHANGE_ME_MAILGUN_SMTP_PASSWORD"
+
+# Production validation checks that public HTTPS is available and direct HTTP
+# origins are not serving apps. Include the direct origin IP or hostnames for
+# every public app host you expose through Cloudflare.
+# direct_http_urls:
+#   - "http://auth.thekeepstudios.com"
+#   - "http://projects.thekeepstudios.com"
+#   - "http://mindmaps.thekeepstudios.com"
+#   - "http://relationships.thekeepstudios.com"
+#   - "http://grafana.thekeepstudios.com"
+#   - "http://prometheus.thekeepstudios.com"
+#   - "http://alerts.thekeepstudios.com"
+#   - "http://argocd.thekeepstudios.com"
 #     smtp_auto_tls: true
 #     smtp_secure: "STARTTLS"
 #     smtp_ssl_noverify: false

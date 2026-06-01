@@ -79,6 +79,7 @@ Supported profiles:
 static       Static IaC checks only.
 wisemapping  Static checks, k3d cluster, WiseMapping smoke test.
 leantime     Static checks, k3d cluster, Leantime smoke test.
+baserow      Static checks, k3d cluster, Baserow smoke test.
 platform     Static checks, k3d cluster, all local app smoke tests.
 ```
 
@@ -139,6 +140,7 @@ Use the generic target-based smoke entrypoint:
 ```bash
 scripts/dev-smoke.sh wisemapping
 scripts/dev-smoke.sh leantime
+scripts/dev-smoke.sh baserow
 scripts/dev-smoke.sh platform
 ```
 
@@ -147,6 +149,7 @@ Compatibility wrappers are also available:
 ```bash
 scripts/dev-wisemapping-smoke.sh
 scripts/dev-leantime-smoke.sh
+scripts/dev-baserow-smoke.sh
 scripts/dev-platform-smoke.sh
 ```
 
@@ -178,6 +181,16 @@ In a fresh local database, Leantime may redirect the login path to `/install`.
 That is accepted by the smoke and observation probes because it still proves the
 local app is serving a real first-run page.
 
+Baserow probes `http://baserow/` with:
+
+```text
+Host: relationships.thekeepstudios.com
+X-Forwarded-Proto: https
+```
+
+Baserow can take longer than the lighter apps on first pull/start because the
+all-in-one image includes the application, database, worker, and proxy pieces.
+
 The dev secrets are intentionally deterministic so repeated runs do not desync apps from existing local database PVCs. Override them only when you are also deleting the dev cluster or PVC:
 
 ```bash
@@ -192,6 +205,7 @@ After smoke tests pass, open the actual running app:
 ```bash
 scripts/dev-observe.sh wisemapping
 scripts/dev-observe.sh leantime
+scripts/dev-observe.sh baserow
 scripts/dev-observe.sh platform
 ```
 
@@ -200,6 +214,7 @@ Compatibility wrappers are also available:
 ```bash
 scripts/dev-wisemapping-observe.sh
 scripts/dev-leantime-observe.sh
+scripts/dev-baserow-observe.sh
 scripts/dev-platform-observe.sh
 ```
 
@@ -216,6 +231,7 @@ Default local URLs:
 ```text
 WiseMapping: http://localhost:18081
 Leantime:    http://localhost:18080
+Baserow:     http://localhost:18082
 ```
 
 The artifacts include:
@@ -258,6 +274,7 @@ Useful overrides:
 ```bash
 WISEMAPPING_OBSERVE_PORT=18082 scripts/dev-observe.sh wisemapping
 LEANTIME_OBSERVE_PORT=18083 scripts/dev-observe.sh leantime
+BASEROW_OBSERVE_PORT=18084 scripts/dev-observe.sh baserow
 DEV_OBSERVE_ARTIFACT_ROOT=/tmp/platform-observe scripts/dev-observe.sh platform
 DEV_OBSERVE_PATCH_CONFIG=false scripts/dev-observe.sh wisemapping
 ```

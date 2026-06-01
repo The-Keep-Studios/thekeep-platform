@@ -41,6 +41,7 @@
     - platform-authentik
     - platform-leantime
     - platform-wisemapping
+    - platform-baserow
     - platform-monitoring-prometheus
     - platform-monitoring-loki
   register: app_status
@@ -108,6 +109,24 @@
   changed_when: false
   failed_when: backup_cron.rc != 0 or backup_cron.stdout | default('') | trim | length == 0
 
+- name: Check Baserow backup CronJob
+  ansible.builtin.command:
+    argv:
+      - "{{ platform_kubectl }}"
+      - get
+      - cronjob
+      - baserow-backup
+      - -n
+      - baserow
+      - -o
+      - name
+  become: true
+  become_user: k3s-admin
+  environment: "{{ platform_kubectl_env }}"
+  register: baserow_backup_cron
+  changed_when: false
+  failed_when: baserow_backup_cron.rc != 0 or baserow_backup_cron.stdout | default('') | trim != 'cronjob.batch/baserow-backup'
+
 - name: Verify platform alert rules are reconciled
   ansible.builtin.command:
     argv:
@@ -126,7 +145,9 @@
   failed_when: >
     prometheus_rules.rc != 0 or
     not (prometheus_rules.stdout is search('LeantimeBackupFailed')) or
+    not (prometheus_rules.stdout is search('BaserowBackupFailed')) or
     not (prometheus_rules.stdout is search('WiseMappingBackendUnavailable')) or
+    not (prometheus_rules.stdout is search('BaserowUnavailable')) or
     not (prometheus_rules.stdout is search('GrafanaUnavailable')) or
     not (prometheus_rules.stdout is search('LokiUnavailable')) or
     not (prometheus_rules.stdout is search('PromtailUnavailable'))
@@ -193,6 +214,25 @@
   failed_when: leantime_logs_dashboard.rc != 0 or leantime_logs_dashboard.stdout | default('') | trim != '1'
   when: monitoring_enabled | default(true) | bool
 
+- name: Verify Baserow logs dashboard is reconciled
+  ansible.builtin.command:
+    argv:
+      - "{{ platform_kubectl }}"
+      - get
+      - configmap
+      - baserow-logs-dashboard
+      - -n
+      - monitoring
+      - -o
+      - "jsonpath={.metadata.labels.grafana_dashboard}"
+  become: true
+  become_user: k3s-admin
+  environment: "{{ platform_kubectl_env }}"
+  register: baserow_logs_dashboard
+  changed_when: false
+  failed_when: baserow_logs_dashboard.rc != 0 or baserow_logs_dashboard.stdout | default('') | trim != '1'
+  when: monitoring_enabled | default(true) | bool
+
 - name: Read platform probe validation timestamp
   ansible.builtin.command:
     argv:
@@ -205,6 +245,7 @@
   ansible.builtin.set_fact:
     loki_volume_validation_pod_name: "loki-volume-validation-{{ platform_probe_validation_timestamp.stdout }}"
     wisemapping_api_validation_pod_name: "wisemapping-api-validation-{{ platform_probe_validation_timestamp.stdout }}"
+    baserow_web_validation_pod_name: "baserow-web-validation-{{ platform_probe_validation_timestamp.stdout }}"
     loki_volume_validation_start_ns: "{{ ((platform_probe_validation_timestamp.stdout | int) - 900) ~ '000000000' }}"
     loki_volume_validation_end_ns: "{{ (platform_probe_validation_timestamp.stdout | int) ~ '000000000' }}"
 
@@ -266,6 +307,36 @@
   register: wisemapping_backend_api
   changed_when: false
   failed_when: wisemapping_backend_api.rc != 0
+
+- name: Verify Baserow web service is reachable
+  ansible.builtin.command:
+    argv:
+      - "{{ platform_kubectl }}"
+      - run
+      - "{{ baserow_web_validation_pod_name }}"
+      - -n
+      - baserow
+      - --rm=true
+      - --attach=true
+      - -i
+      - --restart=Never
+      - --image=curlimages/curl:8.8.0
+      - --quiet=true
+      - --
+      - sh
+      - -ceu
+      - |
+        curl -fsS --max-time 20 \
+          -H "Host: relationships.thekeepstudios.com" \
+          -H "X-Forwarded-Proto: https" \
+          http://baserow/ > /tmp/baserow.html
+        grep -Eiq "baserow|login|sign" /tmp/baserow.html
+  become: true
+  become_user: k3s-admin
+  environment: "{{ platform_kubectl_env }}"
+  register: baserow_web
+  changed_when: false
+  failed_when: baserow_web.rc != 0
 
 - name: Read Leantime backup validation timestamp
   ansible.builtin.command:
@@ -425,6 +496,7 @@
     - https://auth.thekeepstudios.com
     - https://projects.thekeepstudios.com
     - https://mindmaps.thekeepstudios.com
+    - https://relationships.thekeepstudios.com
     - https://grafana.thekeepstudios.com
     - https://prometheus.thekeepstudios.com
     - https://alerts.thekeepstudios.com

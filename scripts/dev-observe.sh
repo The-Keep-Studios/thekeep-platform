@@ -81,9 +81,19 @@ app_config() {
       APP_PROBE_PATTERN="leantime|login|email|password|install|redirecting"
       APP_CONFIG_KIND="leantime"
       ;;
+    baserow)
+      APP_NAMESPACE="baserow"
+      APP_SERVICE="baserow"
+      APP_DEPLOYMENT="baserow"
+      APP_PORT="${BASEROW_OBSERVE_PORT:-18082}"
+      APP_HOST="${BASEROW_PROBE_HOST:-relationships.thekeepstudios.com}"
+      APP_PROBE_PATH="/"
+      APP_PROBE_PATTERN="login|sign|create account"
+      APP_CONFIG_KIND="baserow"
+      ;;
     *)
       echo "Unknown dev observe target: ${target}" >&2
-      echo "Usage: scripts/dev-observe.sh [wisemapping|leantime|platform]" >&2
+      echo "Usage: scripts/dev-observe.sh [wisemapping|leantime|baserow|platform]" >&2
       return 2
       ;;
   esac
@@ -122,6 +132,19 @@ patch_local_config() {
         --type merge \
         -p "{\"data\":{\"LEAN_APP_URL\":\"${local_base_url}\"}}"
       kubectl rollout restart "deployment/${APP_DEPLOYMENT}" -n "${APP_NAMESPACE}"
+      kubectl rollout status "deployment/${APP_DEPLOYMENT}" -n "${APP_NAMESPACE}" --timeout=10m
+      ;;
+    baserow)
+      local_base_url="http://127.0.0.1:${APP_PORT}"
+      APP_HOST="127.0.0.1:${APP_PORT}"
+      echo "Patching local Baserow public URL for browser observation: ${local_base_url}"
+      kubectl get deployment baserow -n "${APP_NAMESPACE}" \
+        -o yaml > "${artifact_dir}/baserow-deployment.original.yaml"
+      kubectl set env "deployment/${APP_DEPLOYMENT}" -n "${APP_NAMESPACE}" \
+        BASEROW_PUBLIC_URL="${local_base_url}"
+      kubectl patch "deployment/${APP_DEPLOYMENT}" -n "${APP_NAMESPACE}" \
+        --type=json \
+        -p "[{\"op\":\"replace\",\"path\":\"/spec/template/spec/containers/0/startupProbe/httpGet/httpHeaders/0/value\",\"value\":\"${APP_HOST}\"},{\"op\":\"replace\",\"path\":\"/spec/template/spec/containers/0/readinessProbe/httpGet/httpHeaders/0/value\",\"value\":\"${APP_HOST}\"},{\"op\":\"replace\",\"path\":\"/spec/template/spec/containers/0/livenessProbe/httpGet/httpHeaders/0/value\",\"value\":\"${APP_HOST}\"}]"
       kubectl rollout status "deployment/${APP_DEPLOYMENT}" -n "${APP_NAMESPACE}" --timeout=10m
       ;;
   esac
@@ -233,6 +256,9 @@ observe_one() {
 
   local_url="http://127.0.0.1:${APP_PORT}/"
   human_url="http://localhost:${APP_PORT}/"
+  if [ "${APP_CONFIG_KIND}" = "baserow" ]; then
+    human_url="${local_url}"
+  fi
 
   cat > "${artifact_dir}/README.txt" <<EOF
 ${target} local observation
@@ -281,11 +307,11 @@ main() {
 
   for target in "${targets[@]}"; do
     case "${target}" in
-      platform|wisemapping|leantime)
+      platform|wisemapping|leantime|baserow)
         ;;
       *)
         echo "Unknown dev observe target: ${target}" >&2
-        echo "Usage: scripts/dev-observe.sh [wisemapping|leantime|platform]" >&2
+        echo "Usage: scripts/dev-observe.sh [wisemapping|leantime|baserow|platform]" >&2
         exit 2
         ;;
     esac
@@ -299,13 +325,14 @@ main() {
       platform)
         observe_one wisemapping
         observe_one leantime
+        observe_one baserow
         ;;
-      wisemapping|leantime)
+      wisemapping|leantime|baserow)
         observe_one "${target}"
         ;;
       *)
         echo "Unknown dev observe target: ${target}" >&2
-        echo "Usage: scripts/dev-observe.sh [wisemapping|leantime|platform]" >&2
+        echo "Usage: scripts/dev-observe.sh [wisemapping|leantime|baserow|platform]" >&2
         exit 2
         ;;
     esac

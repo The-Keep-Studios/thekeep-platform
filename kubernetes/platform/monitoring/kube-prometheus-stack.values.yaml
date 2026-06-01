@@ -72,6 +72,14 @@ additionalPrometheusRulesMap:
             annotations:
               summary: "Leantime database backup failed"
               description: "The Leantime database backup job {{ $labels.job_name }} has failed."
+          - alert: BaserowBackupFailed
+            expr: kube_job_status_failed{namespace="baserow", job_name=~"baserow-backup-.*"} > 0
+            for: 0m
+            labels:
+              severity: critical
+            annotations:
+              summary: "Baserow data backup failed"
+              description: "The Baserow backup job {{ $labels.job_name }} has failed."
   platform-visibility-rules:
     groups:
       - name: platform.visibility.rules
@@ -84,6 +92,14 @@ additionalPrometheusRulesMap:
             annotations:
               summary: "WiseMapping backend is unavailable"
               description: "The WiseMapping deployment has fewer available replicas than desired. The nginx frontend may still answer / while the Java API is down."
+          - alert: BaserowUnavailable
+            expr: kube_deployment_status_replicas_available{namespace="baserow", deployment="baserow"} < kube_deployment_spec_replicas{namespace="baserow", deployment="baserow"}
+            for: 5m
+            labels:
+              severity: critical
+            annotations:
+              summary: "Baserow is unavailable"
+              description: "The Baserow deployment has fewer available replicas than desired."
           - alert: GrafanaUnavailable
             expr: kube_deployment_status_replicas_available{namespace="monitoring", deployment="kube-prometheus-stack-grafana"} < kube_deployment_spec_replicas{namespace="monitoring", deployment="kube-prometheus-stack-grafana"}
             for: 5m

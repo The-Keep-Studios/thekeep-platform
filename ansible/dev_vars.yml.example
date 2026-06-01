@@ -6,6 +6,7 @@
 #   static       Run local static IaC checks only.
 #   wisemapping  Run static checks, create/reuse k3d, and smoke-test WiseMapping.
 #   leantime     Run static checks, create/reuse k3d, and smoke-test Leantime.
+#   baserow      Run static checks, create/reuse k3d, and smoke-test Baserow.
 #   platform     Run static checks, create/reuse k3d, and smoke-test local app targets.
 local_dev_profile: platform
 
@@ -36,3 +37,5 @@ local_dev_wisemapping_probe_host: mindmaps.thekeepstudios.com
 local_dev_wisemapping_wait_timeout: 10m
 local_dev_leantime_probe_host: projects.thekeepstudios.com
 local_dev_leantime_wait_timeout: 10m
+local_dev_baserow_probe_host: relationships.thekeepstudios.com
+local_dev_baserow_wait_timeout: 15m

@@ -1,0 +1,137 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: baserow
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: baserow-data
+  namespace: baserow
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 20Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: baserow
+  namespace: baserow
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: baserow
+  template:
+    metadata:
+      labels:
+        app: baserow
+    spec:
+      containers:
+      - name: baserow
+        image: baserow/baserow:2.2.2
+        imagePullPolicy: IfNotPresent
+        env:
+        - name: BASEROW_PUBLIC_URL
+          value: https://relationships.thekeepstudios.com
+        - name: BASEROW_RUN_MINIMAL
+          value: "yes"
+        - name: BASEROW_AMOUNT_OF_WORKERS
+          value: "1"
+        - name: BASEROW_AMOUNT_OF_GUNICORN_WORKERS
+          value: "2"
+        ports:
+        - name: http
+          containerPort: 80
+        - name: https
+          containerPort: 443
+        startupProbe:
+          httpGet:
+            path: /api/_health/
+            port: http
+            httpHeaders:
+            - name: Host
+              value: relationships.thekeepstudios.com
+            - name: X-Forwarded-Proto
+              value: https
+          failureThreshold: 60
+          periodSeconds: 10
+          timeoutSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /api/_health/
+            port: http
+            httpHeaders:
+            - name: Host
+              value: relationships.thekeepstudios.com
+            - name: X-Forwarded-Proto
+              value: https
+          periodSeconds: 15
+          timeoutSeconds: 10
+          failureThreshold: 4
+        livenessProbe:
+          httpGet:
+            path: /api/_health/
+            port: http
+            httpHeaders:
+            - name: Host
+              value: relationships.thekeepstudios.com
+            - name: X-Forwarded-Proto
+              value: https
+          periodSeconds: 30
+          timeoutSeconds: 15
+          failureThreshold: 4
+        volumeMounts:
+        - name: data
+          mountPath: /baserow/data
+        resources:
+          requests:
+            cpu: "250m"
+            memory: "512Mi"
+          limits:
+            cpu: "2000m"
+            memory: "4Gi"
+      volumes:
+      - name: data
+        persistentVolumeClaim:
+          claimName: baserow-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: baserow
+  namespace: baserow
+spec:
+  type: ClusterIP
+  selector:
+    app: baserow
+  ports:
+  - name: http
+    port: 80
+    targetPort: http
+    protocol: TCP
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: baserow-ingress
+  namespace: baserow
+  annotations:
+    traefik.ingress.kubernetes.io/service.serversscheme: http
+spec:
+  rules:
+  - host: relationships.thekeepstudios.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: baserow
+            port:
+              number: 80
