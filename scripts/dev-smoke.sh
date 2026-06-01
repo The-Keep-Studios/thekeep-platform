@@ -67,6 +67,18 @@ diagnostics_baserow() {
   kubectl logs deploy/baserow -n baserow --all-containers --tail=200 || true
 }
 
+diagnostics_optional_crm() {
+  kubectl get pods,deploy,svc,pvc,cronjob,ingress -n twenty || true
+  kubectl get pods,deploy,svc,pvc,cronjob,ingress -n espocrm || true
+  kubectl describe deploy/twenty-server -n twenty || true
+  kubectl describe deploy/twenty-worker -n twenty || true
+  kubectl describe deploy/espocrm -n espocrm || true
+  kubectl logs deploy/twenty-server -n twenty --all-containers --tail=200 || true
+  kubectl logs deploy/twenty-worker -n twenty --all-containers --tail=200 || true
+  kubectl logs deploy/espocrm -n espocrm --all-containers --tail=200 || true
+  kubectl logs deploy/espocrm-daemon -n espocrm --all-containers --tail=200 || true
+}
+
 smoke_wisemapping() {
   local probe_host="${WISEMAPPING_PROBE_HOST:-mindmaps.thekeepstudios.com}"
   local wait_timeout="${WISEMAPPING_WAIT_TIMEOUT:-${DEFAULT_WAIT_TIMEOUT}}"
@@ -199,6 +211,107 @@ smoke_baserow() {
   echo "Baserow smoke test passed"
 }
 
+smoke_twenty() {
+  local probe_host="${TWENTY_PROBE_HOST:-twenty.thekeepstudios.com}"
+  local wait_timeout="${TWENTY_WAIT_TIMEOUT:-20m}"
+  local pg_password="${TWENTY_DEV_PG_DATABASE_PASSWORD:-dev-twenty-postgres-password}"
+  local encryption_key="${TWENTY_DEV_ENCRYPTION_KEY:-dev-twenty-encryption-key-32chars}"
+  local app_secret="${TWENTY_DEV_APP_SECRET:-dev-twenty-app-secret-32chars}"
+  local probe_name
+  local probe_output
+
+  echo "== Twenty CRM smoke =="
+  kubectl create namespace twenty --dry-run=client -o yaml | kubectl apply -f -
+  kubectl create secret generic twenty-secrets -n twenty \
+    --from-literal=PG_DATABASE_PASSWORD="${pg_password}" \
+    --from-literal=ENCRYPTION_KEY="${encryption_key}" \
+    --from-literal=APP_SECRET="${app_secret}" \
+    --dry-run=client -o yaml | kubectl apply -f -
+
+  kubectl apply -k kubernetes/apps/twenty
+  kubectl rollout status deploy/twenty-postgres -n twenty --timeout="${wait_timeout}"
+  kubectl rollout status deploy/twenty-redis -n twenty --timeout="${wait_timeout}"
+  kubectl rollout status deploy/twenty-server -n twenty --timeout="${wait_timeout}"
+  kubectl rollout status deploy/twenty-worker -n twenty --timeout="${wait_timeout}"
+  assert_deployment_available twenty twenty-postgres
+  assert_deployment_available twenty twenty-redis
+  assert_deployment_available twenty twenty-server
+  assert_deployment_available twenty twenty-worker
+
+  probe_name="twenty-smoke-$(date +%s)"
+  probe_output="$(kubectl run -n twenty "${probe_name}" \
+    --rm=true \
+    --attach=true \
+    -i \
+    --restart=Never \
+    --image="${PROBE_IMAGE}" \
+    --quiet=true \
+    -- \
+    sh -ceu '
+      curl -fsS --max-time 20 http://twenty/healthz > /tmp/twenty-health.txt
+      curl -fsS --max-time 20 \
+        -H "Host: '"${probe_host}"'" \
+        -H "X-Forwarded-Proto: https" \
+        http://twenty/ > /tmp/twenty.html
+      test -s /tmp/twenty.html
+      grep -Eiq "twenty|login|sign|workspace" /tmp/twenty.html
+      head -c 500 /tmp/twenty.html
+    ' 2>&1)"
+  echo "${probe_output}"
+  grep -Eiq "twenty|login|sign|workspace" <<< "${probe_output}"
+
+  echo "Twenty CRM smoke test passed"
+}
+
+smoke_espocrm() {
+  local probe_host="${ESPOCRM_PROBE_HOST:-espocrm.thekeepstudios.com}"
+  local wait_timeout="${ESPOCRM_WAIT_TIMEOUT:-20m}"
+  local root_password="${ESPOCRM_DEV_DB_ROOT_PASSWORD:-dev-espocrm-root-password}"
+  local db_password="${ESPOCRM_DEV_DB_PASSWORD:-dev-espocrm-db-password}"
+  local admin_password="${ESPOCRM_DEV_ADMIN_PASSWORD:-dev-espocrm-admin-password}"
+  local probe_name
+  local probe_output
+
+  echo "== EspoCRM smoke =="
+  kubectl create namespace espocrm --dry-run=client -o yaml | kubectl apply -f -
+  kubectl create secret generic espocrm-secrets -n espocrm \
+    --from-literal=MARIADB_ROOT_PASSWORD="${root_password}" \
+    --from-literal=MARIADB_PASSWORD="${db_password}" \
+    --from-literal=ESPOCRM_ADMIN_PASSWORD="${admin_password}" \
+    --dry-run=client -o yaml | kubectl apply -f -
+
+  kubectl apply -k kubernetes/apps/espocrm
+  kubectl rollout status deploy/espocrm-db -n espocrm --timeout="${wait_timeout}"
+  kubectl rollout status deploy/espocrm -n espocrm --timeout="${wait_timeout}"
+  kubectl rollout status deploy/espocrm-daemon -n espocrm --timeout="${wait_timeout}"
+  assert_deployment_available espocrm espocrm-db
+  assert_deployment_available espocrm espocrm
+  assert_deployment_available espocrm espocrm-daemon
+
+  probe_name="espocrm-smoke-$(date +%s)"
+  probe_output="$(kubectl run -n espocrm "${probe_name}" \
+    --rm=true \
+    --attach=true \
+    -i \
+    --restart=Never \
+    --image="${PROBE_IMAGE}" \
+    --quiet=true \
+    -- \
+    sh -ceu '
+      curl -fsS --max-time 20 \
+        -H "Host: '"${probe_host}"'" \
+        -H "X-Forwarded-Proto: https" \
+        http://espocrm/ > /tmp/espocrm.html
+      test -s /tmp/espocrm.html
+      grep -Eiq "espocrm|login|username|password" /tmp/espocrm.html
+      head -c 500 /tmp/espocrm.html
+    ' 2>&1)"
+  echo "${probe_output}"
+  grep -Eiq "espocrm|login|username|password" <<< "${probe_output}"
+
+  echo "EspoCRM smoke test passed"
+}
+
 run_target() {
   local target="$1"
 
@@ -221,6 +334,22 @@ run_target() {
         return 1
       fi
       ;;
+    twenty)
+      if ! smoke_twenty; then
+        diagnostics_optional_crm
+        return 1
+      fi
+      ;;
+    espocrm)
+      if ! smoke_espocrm; then
+        diagnostics_optional_crm
+        return 1
+      fi
+      ;;
+    optional-crm|crm-bakeoff)
+      run_target twenty
+      run_target espocrm
+      ;;
     platform)
       run_target wisemapping
       run_target leantime
@@ -228,7 +357,7 @@ run_target() {
       ;;
     *)
       echo "Unknown dev smoke target: ${target}" >&2
-      echo "Usage: scripts/dev-smoke.sh [wisemapping|leantime|baserow|platform]..." >&2
+      echo "Usage: scripts/dev-smoke.sh [wisemapping|leantime|baserow|twenty|espocrm|optional-crm|crm-bakeoff|platform]..." >&2
       return 2
       ;;
   esac
@@ -236,11 +365,11 @@ run_target() {
 
 validate_target() {
   case "$1" in
-    wisemapping|leantime|baserow|platform)
+    wisemapping|leantime|baserow|twenty|espocrm|optional-crm|crm-bakeoff|platform)
       ;;
     *)
       echo "Unknown dev smoke target: $1" >&2
-      echo "Usage: scripts/dev-smoke.sh [wisemapping|leantime|baserow|platform]..." >&2
+      echo "Usage: scripts/dev-smoke.sh [wisemapping|leantime|baserow|twenty|espocrm|optional-crm|crm-bakeoff|platform]..." >&2
       return 2
       ;;
   esac

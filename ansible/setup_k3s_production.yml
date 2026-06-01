@@ -90,6 +90,51 @@
       become: false
       tags: [always]
 
+    - name: Normalize optional CRM app flags
+      ansible.builtin.set_fact:
+        platform_optional_twenty_enabled: "{{ ((platform_optional_apps | default({})).twenty | default({})).enabled | default(false) | bool }}"
+        platform_optional_espocrm_enabled: "{{ ((platform_optional_apps | default({})).espocrm | default({})).enabled | default(false) | bool }}"
+      tags: [always]
+
+    - name: Define required optional CRM secret keys
+      ansible.builtin.set_fact:
+        required_optional_crm_secret_keys: >-
+          {{
+            (['twenty_pg_database_password', 'twenty_encryption_key', 'twenty_app_secret'] if (platform_optional_twenty_enabled | bool) else []) +
+            (['espocrm_db_root_password', 'espocrm_db_password', 'espocrm_admin_password'] if (platform_optional_espocrm_enabled | bool) else [])
+          }}
+      tags: [always]
+
+    - name: Detect missing optional CRM secrets
+      ansible.builtin.set_fact:
+        missing_optional_crm_secret_keys: "{{ required_optional_crm_secret_keys | difference(platform_secrets.keys() | list) }}"
+      when: required_optional_crm_secret_keys | length > 0
+      tags: [always]
+
+    - name: Fail if optional CRM secrets are missing
+      ansible.builtin.fail:
+        msg: "production_vars.yml is missing optional CRM platform_secrets keys: {{ missing_optional_crm_secret_keys | join(', ') }}"
+      when:
+        - required_optional_crm_secret_keys | length > 0
+        - missing_optional_crm_secret_keys | default([]) | length > 0
+      tags: [always]
+
+    - name: Fail if optional CRM secrets are empty or placeholders
+      ansible.builtin.fail:
+        msg: "The optional CRM production secret {{ item }} is empty or still set to a placeholder value."
+      vars:
+        secret_value: "{{ platform_secrets[item] | default('') | string }}"
+        normalized_secret_value: "{{ secret_value | trim | lower }}"
+      loop: "{{ required_optional_crm_secret_keys | default([]) }}"
+      when: >
+        (required_optional_crm_secret_keys | length > 0) and
+        (
+          (secret_value | trim | length == 0) or
+          (normalized_secret_value in production_placeholder_values) or
+          (normalized_secret_value is match('^(change[_-]?me|replace[_-]?me|todo|example|your[_ -]?value|your[_ -]?secret)'))
+        )
+      tags: [always]
+
     - name: Fail if WiseMapping OIDC is enabled without provider settings
       ansible.builtin.fail:
         msg: >-

@@ -40,6 +40,54 @@ spec:
     syncOptions:
     - CreateNamespace=true
     - ServerSideApply=true
+{% if ((platform_optional_apps | default({})).twenty | default({})).enabled | default(false) | bool %}
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: platform-crm-twenty
+  namespace: argocd
+spec:
+  project: platform
+  source:
+    repoURL: "{{ gitops_repo_url }}"
+    targetRevision: "{{ gitops_revision }}"
+    path: kubernetes/apps/twenty
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: twenty
+  syncPolicy:
+    automated:
+      prune: false
+      selfHeal: true
+    syncOptions:
+    - CreateNamespace=true
+    - ServerSideApply=true
+{% endif %}
+{% if ((platform_optional_apps | default({})).espocrm | default({})).enabled | default(false) | bool %}
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: platform-crm-espocrm
+  namespace: argocd
+spec:
+  project: platform
+  source:
+    repoURL: "{{ gitops_repo_url }}"
+    targetRevision: "{{ gitops_revision }}"
+    path: kubernetes/apps/espocrm
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: espocrm
+  syncPolicy:
+    automated:
+      prune: false
+      selfHeal: true
+    syncOptions:
+    - CreateNamespace=true
+    - ServerSideApply=true
+{% endif %}
 ---
 apiVersion: argoproj.io/v1alpha1
 kind: Application

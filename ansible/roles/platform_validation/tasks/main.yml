@@ -5,6 +5,8 @@
       KUBECONFIG: /home/k3s-admin/.kube/config
     platform_validation_default_argo_app_statuses:
       - Synced Healthy
+    platform_validation_twenty_enabled: "{{ ((platform_optional_apps | default({})).twenty | default({})).enabled | default(false) | bool }}"
+    platform_validation_espocrm_enabled: "{{ ((platform_optional_apps | default({})).espocrm | default({})).enabled | default(false) | bool }}"
 
 - name: Check Kubernetes API connectivity
   ansible.builtin.command:
@@ -72,6 +74,49 @@
       platform_validation_default_argo_app_statuses +
       (platform_validation_argo_app_allowed_statuses[item.item] | default([]))
     )
+
+- name: Check optional CRM Argo application status
+  ansible.builtin.command:
+    argv:
+      - "{{ platform_kubectl }}"
+      - get
+      - application
+      - "{{ item.name }}"
+      - -n
+      - argocd
+      - -o
+      - "jsonpath={.status.sync.status} {.status.health.status}"
+  become: true
+  become_user: k3s-admin
+  environment: "{{ platform_kubectl_env }}"
+  loop:
+    - name: platform-crm-twenty
+      enabled: "{{ platform_validation_twenty_enabled }}"
+    - name: platform-crm-espocrm
+      enabled: "{{ platform_validation_espocrm_enabled }}"
+  register: optional_crm_app_status
+  until: >
+    optional_crm_app_status.rc == 0 and
+    (optional_crm_app_status.stdout | default('') | trim) in platform_validation_default_argo_app_statuses
+  retries: "{{ platform_validation_argo_app_status_retries | default(60) }}"
+  delay: "{{ platform_validation_argo_app_status_delay | default(10) }}"
+  changed_when: false
+  failed_when: false
+  when: item.enabled | bool
+
+- name: Fail if optional CRM Argo application is missing or unhealthy
+  ansible.builtin.fail:
+    msg: >-
+      Argo application {{ item.item.name }} is not ready
+      (rc={{ item.rc }}, status={{ item.stdout | default('') | trim | default('missing', true) }},
+      expected={{ platform_validation_default_argo_app_statuses | join(' or ') }},
+      stderr={{ item.stderr | default('') | trim | default('none', true) }}).
+  loop: "{{ optional_crm_app_status.results | default([]) }}"
+  when:
+    - item.item.enabled | bool
+    - >
+      item.rc != 0 or
+      (item.stdout | default('') | trim) not in platform_validation_default_argo_app_statuses
 
 - name: Check Cloudflare tunnel deployment
   ansible.builtin.command:
@@ -338,6 +383,107 @@
   changed_when: false
   failed_when: baserow_web.rc != 0
 
+- name: Check Twenty backup CronJob
+  ansible.builtin.command:
+    argv:
+      - "{{ platform_kubectl }}"
+      - get
+      - cronjob
+      - twenty-backup
+      - -n
+      - twenty
+      - -o
+      - name
+  become: true
+  become_user: k3s-admin
+  environment: "{{ platform_kubectl_env }}"
+  register: twenty_backup_cron
+  changed_when: false
+  failed_when: twenty_backup_cron.rc != 0 or twenty_backup_cron.stdout | default('') | trim != 'cronjob.batch/twenty-backup'
+  when: platform_validation_twenty_enabled | bool
+
+- name: Check EspoCRM backup CronJob
+  ansible.builtin.command:
+    argv:
+      - "{{ platform_kubectl }}"
+      - get
+      - cronjob
+      - espocrm-backup
+      - -n
+      - espocrm
+      - -o
+      - name
+  become: true
+  become_user: k3s-admin
+  environment: "{{ platform_kubectl_env }}"
+  register: espocrm_backup_cron
+  changed_when: false
+  failed_when: espocrm_backup_cron.rc != 0 or espocrm_backup_cron.stdout | default('') | trim != 'cronjob.batch/espocrm-backup'
+  when: platform_validation_espocrm_enabled | bool
+
+- name: Verify Twenty optional CRM service is reachable
+  ansible.builtin.command:
+    argv:
+      - "{{ platform_kubectl }}"
+      - run
+      - "twenty-web-validation-{{ platform_probe_validation_timestamp.stdout }}"
+      - -n
+      - twenty
+      - --rm=true
+      - --attach=true
+      - -i
+      - --restart=Never
+      - --image=curlimages/curl:8.8.0
+      - --quiet=true
+      - --
+      - sh
+      - -ceu
+      - |
+        curl -fsS --max-time 20 http://twenty/healthz >/tmp/twenty-health.txt
+        curl -fsS --max-time 20 \
+          -H "Host: twenty.thekeepstudios.com" \
+          -H "X-Forwarded-Proto: https" \
+          http://twenty/ > /tmp/twenty.html
+        grep -Eiq "twenty|login|sign|workspace" /tmp/twenty.html
+  become: true
+  become_user: k3s-admin
+  environment: "{{ platform_kubectl_env }}"
+  register: twenty_web
+  changed_when: false
+  failed_when: twenty_web.rc != 0
+  when: platform_validation_twenty_enabled | bool
+
+- name: Verify EspoCRM optional CRM service is reachable
+  ansible.builtin.command:
+    argv:
+      - "{{ platform_kubectl }}"
+      - run
+      - "espocrm-web-validation-{{ platform_probe_validation_timestamp.stdout }}"
+      - -n
+      - espocrm
+      - --rm=true
+      - --attach=true
+      - -i
+      - --restart=Never
+      - --image=curlimages/curl:8.8.0
+      - --quiet=true
+      - --
+      - sh
+      - -ceu
+      - |
+        curl -fsS --max-time 20 \
+          -H "Host: espocrm.thekeepstudios.com" \
+          -H "X-Forwarded-Proto: https" \
+          http://espocrm/ > /tmp/espocrm.html
+        grep -Eiq "espocrm|login|username|password" /tmp/espocrm.html
+  become: true
+  become_user: k3s-admin
+  environment: "{{ platform_kubectl_env }}"
+  register: espocrm_web
+  changed_when: false
+  failed_when: espocrm_web.rc != 0
+  when: platform_validation_espocrm_enabled | bool
+
 - name: Read Leantime backup validation timestamp
   ansible.builtin.command:
     argv:
@@ -492,15 +638,7 @@
     url: "{{ item }}"
     status_code: [200, 401, 403]
     timeout: 15
-  loop:
-    - https://auth.thekeepstudios.com
-    - https://projects.thekeepstudios.com
-    - https://mindmaps.thekeepstudios.com
-    - https://relationships.thekeepstudios.com
-    - https://grafana.thekeepstudios.com
-    - https://prometheus.thekeepstudios.com
-    - https://alerts.thekeepstudios.com
-    - https://argocd.thekeepstudios.com
+  loop: "{{ ['https://auth.thekeepstudios.com', 'https://projects.thekeepstudios.com', 'https://mindmaps.thekeepstudios.com', 'https://relationships.thekeepstudios.com', 'https://grafana.thekeepstudios.com', 'https://prometheus.thekeepstudios.com', 'https://alerts.thekeepstudios.com', 'https://argocd.thekeepstudios.com'] + (['https://twenty.thekeepstudios.com'] if (platform_validation_twenty_enabled | bool) else []) + (['https://espocrm.thekeepstudios.com'] if (platform_validation_espocrm_enabled | bool) else []) }}"
   when: require_external_https | default(true) | bool
 
 - name: Verify protected endpoints require authentication

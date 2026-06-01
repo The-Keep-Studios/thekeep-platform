@@ -1,0 +1,74 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: twenty-backup-pvc
+  namespace: twenty
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 20Gi
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: twenty-backup
+  namespace: twenty
+spec:
+  schedule: "27 3 * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      template:
+        spec:
+          restartPolicy: Never
+          containers:
+          - name: backup
+            image: postgres:16
+            imagePullPolicy: IfNotPresent
+            env:
+            - name: PGDATABASE
+              value: default
+            - name: PGHOST
+              value: twenty-postgres
+            - name: PGUSER
+              value: postgres
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: twenty-secrets
+                  key: PG_DATABASE_PASSWORD
+            command:
+            - sh
+            - -ceu
+            - |
+              ts="$(date -u +%Y%m%dT%H%M%SZ)"
+              mkdir -p /backup
+              pg_dump --clean --if-exists --no-owner --no-privileges | gzip > "/backup/twenty_db_${ts}.sql.gz"
+              tar -czf "/backup/twenty_local_storage_${ts}.tar.gz" -C /source local-storage
+              find /backup -type f -name 'twenty_*' -mtime +14 -delete
+              ls -lah /backup
+            volumeMounts:
+            - name: backup-data
+              mountPath: /backup
+            - name: local-storage
+              mountPath: /source/local-storage
+              readOnly: true
+            resources:
+              requests:
+                cpu: "100m"
+                memory: "256Mi"
+              limits:
+                cpu: "1000m"
+                memory: "1Gi"
+          volumes:
+          - name: backup-data
+            persistentVolumeClaim:
+              claimName: twenty-backup-pvc
+          - name: local-storage
+            persistentVolumeClaim:
+              claimName: twenty-server-local-data

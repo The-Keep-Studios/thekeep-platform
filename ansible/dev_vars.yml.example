@@ -7,6 +7,10 @@
 #   wisemapping  Run static checks, create/reuse k3d, and smoke-test WiseMapping.
 #   leantime     Run static checks, create/reuse k3d, and smoke-test Leantime.
 #   baserow      Run static checks, create/reuse k3d, and smoke-test Baserow.
+#   twenty       Run static checks, create/reuse k3d, and smoke-test Twenty.
+#   espocrm      Run static checks, create/reuse k3d, and smoke-test EspoCRM.
+#   optional-crm Run static checks, create/reuse k3d, and smoke-test both optional CRM candidates.
+#   crm-bakeoff  Compatibility alias for optional-crm.
 #   platform     Run static checks, create/reuse k3d, and smoke-test local app targets.
 local_dev_profile: platform
 
@@ -39,3 +43,7 @@ local_dev_leantime_probe_host: projects.thekeepstudios.com
 local_dev_leantime_wait_timeout: 10m
 local_dev_baserow_probe_host: relationships.thekeepstudios.com
 local_dev_baserow_wait_timeout: 15m
+local_dev_twenty_probe_host: twenty.thekeepstudios.com
+local_dev_twenty_wait_timeout: 20m
+local_dev_espocrm_probe_host: espocrm.thekeepstudios.com
+local_dev_espocrm_wait_timeout: 20m
