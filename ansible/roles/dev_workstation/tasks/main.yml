@@ -6,8 +6,8 @@
 - name: Validate local development profile
   ansible.builtin.assert:
     that:
-      - local_dev_effective_profile in ['static', 'wisemapping', 'leantime', 'platform']
-    fail_msg: "local_dev_profile must be one of: static, wisemapping, leantime, platform."
+      - local_dev_effective_profile in ['static', 'wisemapping', 'leantime', 'baserow', 'twenty', 'espocrm', 'optional-crm', 'crm-bakeoff', 'platform']
+    fail_msg: "local_dev_profile must be one of: static, wisemapping, leantime, baserow, twenty, espocrm, optional-crm, crm-bakeoff, platform."
   tags: [always]
 
 - name: Apply local development profile defaults
@@ -175,6 +175,12 @@
     WISEMAPPING_WAIT_TIMEOUT: "{{ local_dev_wisemapping_wait_timeout | default('10m') }}"
     LEANTIME_PROBE_HOST: "{{ local_dev_leantime_probe_host | default('projects.thekeepstudios.com') }}"
     LEANTIME_WAIT_TIMEOUT: "{{ local_dev_leantime_wait_timeout | default('10m') }}"
+    BASEROW_PROBE_HOST: "{{ local_dev_baserow_probe_host | default('relationships.thekeepstudios.com') }}"
+    BASEROW_WAIT_TIMEOUT: "{{ local_dev_baserow_wait_timeout | default('15m') }}"
+    TWENTY_PROBE_HOST: "{{ local_dev_twenty_probe_host | default('twenty.thekeepstudios.com') }}"
+    TWENTY_WAIT_TIMEOUT: "{{ local_dev_twenty_wait_timeout | default('20m') }}"
+    ESPOCRM_PROBE_HOST: "{{ local_dev_espocrm_probe_host | default('espocrm.thekeepstudios.com') }}"
+    ESPOCRM_WAIT_TIMEOUT: "{{ local_dev_espocrm_wait_timeout | default('20m') }}"
     DEV_MIN_FREE_GIB: "{{ local_dev_min_free_gib | default('80') }}"
     DEV_MIN_FREE_PERCENT: "{{ local_dev_min_free_percent | default('8') }}"
     DEV_SKIP_DISK_PREFLIGHT: "{{ (local_dev_skip_disk_preflight | default(false) | bool) | string | lower }}"

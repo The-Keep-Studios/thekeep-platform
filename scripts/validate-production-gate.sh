@@ -12,6 +12,7 @@ APP_NAMES=(
   platform-authentik
   platform-leantime
   platform-wisemapping
+  platform-baserow
   platform-monitoring-prometheus
   platform-monitoring-loki
 )
@@ -20,6 +21,7 @@ HTTPS_ENDPOINTS=(
   https://auth.thekeepstudios.com
   https://projects.thekeepstudios.com
   https://mindmaps.thekeepstudios.com
+  https://relationships.thekeepstudios.com
   https://grafana.thekeepstudios.com
   https://prometheus.thekeepstudios.com
   https://alerts.thekeepstudios.com
@@ -95,6 +97,12 @@ check_backup_resources() {
     pass "Leantime backup CronJob exists"
   else
     fail "Leantime backup CronJob is missing"
+  fi
+
+  if kadmin get cronjob baserow-backup -n baserow >/dev/null 2>&1; then
+    pass "Baserow backup CronJob exists"
+  else
+    fail "Baserow backup CronJob is missing"
   fi
 }
 

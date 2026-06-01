@@ -55,6 +55,13 @@ platform_email:
   wisemapping:
     use_smtp: false
 
+# Optional CRM apps. Baserow remains the core relationship-management app.
+platform_optional_apps:
+  twenty:
+    enabled: false
+  espocrm:
+    enabled: false
+
 platform_validation_argo_app_status_retries: 60
 platform_validation_argo_app_status_delay: 10
 platform_validation_argo_app_allowed_statuses:

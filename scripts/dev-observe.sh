@@ -81,9 +81,39 @@ app_config() {
       APP_PROBE_PATTERN="leantime|login|email|password|install|redirecting"
       APP_CONFIG_KIND="leantime"
       ;;
+    baserow)
+      APP_NAMESPACE="baserow"
+      APP_SERVICE="baserow"
+      APP_DEPLOYMENT="baserow"
+      APP_PORT="${BASEROW_OBSERVE_PORT:-18082}"
+      APP_HOST="${BASEROW_PROBE_HOST:-relationships.thekeepstudios.com}"
+      APP_PROBE_PATH="/"
+      APP_PROBE_PATTERN="login|sign|create account"
+      APP_CONFIG_KIND="baserow"
+      ;;
+    twenty)
+      APP_NAMESPACE="twenty"
+      APP_SERVICE="twenty"
+      APP_DEPLOYMENT="twenty-server"
+      APP_PORT="${TWENTY_OBSERVE_PORT:-18083}"
+      APP_HOST="${TWENTY_PROBE_HOST:-twenty.thekeepstudios.com}"
+      APP_PROBE_PATH="/"
+      APP_PROBE_PATTERN="twenty|login|sign|workspace"
+      APP_CONFIG_KIND="twenty"
+      ;;
+    espocrm)
+      APP_NAMESPACE="espocrm"
+      APP_SERVICE="espocrm"
+      APP_DEPLOYMENT="espocrm"
+      APP_PORT="${ESPOCRM_OBSERVE_PORT:-18084}"
+      APP_HOST="${ESPOCRM_PROBE_HOST:-espocrm.thekeepstudios.com}"
+      APP_PROBE_PATH="/"
+      APP_PROBE_PATTERN="espocrm|login|username|password"
+      APP_CONFIG_KIND="espocrm"
+      ;;
     *)
       echo "Unknown dev observe target: ${target}" >&2
-      echo "Usage: scripts/dev-observe.sh [wisemapping|leantime|platform]" >&2
+      echo "Usage: scripts/dev-observe.sh [wisemapping|leantime|baserow|twenty|espocrm|optional-crm|crm-bakeoff|platform]" >&2
       return 2
       ;;
   esac
@@ -123,6 +153,43 @@ patch_local_config() {
         -p "{\"data\":{\"LEAN_APP_URL\":\"${local_base_url}\"}}"
       kubectl rollout restart "deployment/${APP_DEPLOYMENT}" -n "${APP_NAMESPACE}"
       kubectl rollout status "deployment/${APP_DEPLOYMENT}" -n "${APP_NAMESPACE}" --timeout=10m
+      ;;
+    baserow)
+      local_base_url="http://127.0.0.1:${APP_PORT}"
+      APP_HOST="127.0.0.1:${APP_PORT}"
+      echo "Patching local Baserow public URL for browser observation: ${local_base_url}"
+      kubectl get deployment baserow -n "${APP_NAMESPACE}" \
+        -o yaml > "${artifact_dir}/baserow-deployment.original.yaml"
+      kubectl set env "deployment/${APP_DEPLOYMENT}" -n "${APP_NAMESPACE}" \
+        BASEROW_PUBLIC_URL="${local_base_url}"
+      kubectl patch "deployment/${APP_DEPLOYMENT}" -n "${APP_NAMESPACE}" \
+        --type=json \
+        -p "[{\"op\":\"replace\",\"path\":\"/spec/template/spec/containers/0/startupProbe/httpGet/httpHeaders/0/value\",\"value\":\"${APP_HOST}\"},{\"op\":\"replace\",\"path\":\"/spec/template/spec/containers/0/readinessProbe/httpGet/httpHeaders/0/value\",\"value\":\"${APP_HOST}\"},{\"op\":\"replace\",\"path\":\"/spec/template/spec/containers/0/livenessProbe/httpGet/httpHeaders/0/value\",\"value\":\"${APP_HOST}\"}]"
+      kubectl rollout status "deployment/${APP_DEPLOYMENT}" -n "${APP_NAMESPACE}" --timeout=10m
+      ;;
+    twenty)
+      local_base_url="http://127.0.0.1:${APP_PORT}"
+      APP_HOST="127.0.0.1:${APP_PORT}"
+      echo "Patching local Twenty SERVER_URL for browser observation: ${local_base_url}"
+      kubectl get configmap twenty-config -n "${APP_NAMESPACE}" \
+        -o yaml > "${artifact_dir}/twenty-config.original.yaml"
+      kubectl patch configmap twenty-config -n "${APP_NAMESPACE}" \
+        --type merge \
+        -p "{\"data\":{\"SERVER_URL\":\"${local_base_url}\"}}"
+      kubectl rollout restart deployment/twenty-server -n "${APP_NAMESPACE}"
+      kubectl rollout restart deployment/twenty-worker -n "${APP_NAMESPACE}"
+      kubectl rollout status deployment/twenty-server -n "${APP_NAMESPACE}" --timeout=10m
+      kubectl rollout status deployment/twenty-worker -n "${APP_NAMESPACE}" --timeout=10m
+      ;;
+    espocrm)
+      local_base_url="http://127.0.0.1:${APP_PORT}"
+      APP_HOST="127.0.0.1:${APP_PORT}"
+      echo "Patching local EspoCRM site URL for browser observation: ${local_base_url}"
+      kubectl get deployment espocrm -n "${APP_NAMESPACE}" \
+        -o yaml > "${artifact_dir}/espocrm-deployment.original.yaml"
+      kubectl set env deployment/espocrm -n "${APP_NAMESPACE}" \
+        ESPOCRM_SITE_URL="${local_base_url}"
+      kubectl rollout status deployment/espocrm -n "${APP_NAMESPACE}" --timeout=10m
       ;;
   esac
 }
@@ -233,6 +300,9 @@ observe_one() {
 
   local_url="http://127.0.0.1:${APP_PORT}/"
   human_url="http://localhost:${APP_PORT}/"
+  if [ "${APP_CONFIG_KIND}" = "baserow" ] || [ "${APP_CONFIG_KIND}" = "twenty" ] || [ "${APP_CONFIG_KIND}" = "espocrm" ]; then
+    human_url="${local_url}"
+  fi
 
   cat > "${artifact_dir}/README.txt" <<EOF
 ${target} local observation
@@ -281,11 +351,13 @@ main() {
 
   for target in "${targets[@]}"; do
     case "${target}" in
-      platform|wisemapping|leantime)
+      platform|wisemapping|leantime|baserow)
+        ;;
+      twenty|espocrm|optional-crm|crm-bakeoff)
         ;;
       *)
         echo "Unknown dev observe target: ${target}" >&2
-        echo "Usage: scripts/dev-observe.sh [wisemapping|leantime|platform]" >&2
+        echo "Usage: scripts/dev-observe.sh [wisemapping|leantime|baserow|twenty|espocrm|optional-crm|crm-bakeoff|platform]" >&2
         exit 2
         ;;
     esac
@@ -299,13 +371,18 @@ main() {
       platform)
         observe_one wisemapping
         observe_one leantime
+        observe_one baserow
         ;;
-      wisemapping|leantime)
+      optional-crm|crm-bakeoff)
+        observe_one twenty
+        observe_one espocrm
+        ;;
+      wisemapping|leantime|baserow|twenty|espocrm)
         observe_one "${target}"
         ;;
       *)
         echo "Unknown dev observe target: ${target}" >&2
-        echo "Usage: scripts/dev-observe.sh [wisemapping|leantime|platform]" >&2
+        echo "Usage: scripts/dev-observe.sh [wisemapping|leantime|baserow|twenty|espocrm|optional-crm|crm-bakeoff|platform]" >&2
         exit 2
         ;;
     esac

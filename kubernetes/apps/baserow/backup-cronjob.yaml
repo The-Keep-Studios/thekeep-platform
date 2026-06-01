@@ -1,0 +1,179 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: baserow-backup-pvc
+  namespace: baserow
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 20Gi
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: baserow-backup
+  namespace: baserow
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: baserow-backup
+  namespace: baserow
+rules:
+- apiGroups:
+  - apps
+  resources:
+  - deployments/scale
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - ""
+  resources:
+  - pods
+  verbs:
+  - get
+  - list
+  - watch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: baserow-backup
+  namespace: baserow
+subjects:
+- kind: ServiceAccount
+  name: baserow-backup
+  namespace: baserow
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: baserow-backup
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: baserow-backup
+  namespace: baserow
+spec:
+  schedule: "15 8 * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 2
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          serviceAccountName: baserow-backup
+          terminationGracePeriodSeconds: 60
+          restartPolicy: OnFailure
+          containers:
+          - name: backup
+            image: baserow/baserow:2.2.2
+            imagePullPolicy: IfNotPresent
+            command:
+            - python
+            - -u
+            - -c
+            - |
+              import datetime
+              import json
+              import os
+              import signal
+              import ssl
+              import sys
+              import tarfile
+              import time
+              import urllib.parse
+              import urllib.request
+
+              namespace = "baserow"
+              deployment = "baserow"
+              api_host = "https://kubernetes.default.svc"
+              token_path = "/var/run/secrets/kubernetes.io/serviceaccount/token"
+              ca_path = "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
+              token = open(token_path, encoding="utf-8").read().strip()
+              context = ssl.create_default_context(cafile=ca_path)
+
+              def request(path, method="GET", body=None, content_type="application/json"):
+                  data = None if body is None else json.dumps(body).encode("utf-8")
+                  headers = {"Authorization": f"Bearer {token}"}
+                  if data is not None:
+                      headers["Content-Type"] = content_type
+                  req = urllib.request.Request(
+                      f"{api_host}{path}",
+                      data=data,
+                      headers=headers,
+                      method=method,
+                  )
+                  with urllib.request.urlopen(req, context=context, timeout=30) as response:
+                      raw = response.read()
+                  return json.loads(raw.decode("utf-8")) if raw else {}
+
+              def scale(replicas):
+                  request(
+                      f"/apis/apps/v1/namespaces/{namespace}/deployments/{deployment}/scale",
+                      method="PATCH",
+                      body={"spec": {"replicas": replicas}},
+                      content_type="application/merge-patch+json",
+                  )
+
+              def baserow_pods():
+                  selector = urllib.parse.quote("app=baserow")
+                  return request(f"/api/v1/namespaces/{namespace}/pods?labelSelector={selector}").get("items", [])
+
+              def restore_and_exit(signum, _frame):
+                  scale(1)
+                  sys.exit(128 + signum)
+
+              signal.signal(signal.SIGTERM, restore_and_exit)
+              signal.signal(signal.SIGINT, restore_and_exit)
+
+              try:
+                  scale(0)
+                  deadline = time.time() + 600
+                  while baserow_pods():
+                      if time.time() > deadline:
+                          raise TimeoutError("Timed out waiting for Baserow pod deletion before backup")
+                      time.sleep(5)
+
+                  timestamp = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+                  output = f"/backup/baserow_data_{timestamp}.tar.gz"
+                  with tarfile.open(output, "w:gz") as archive:
+                      archive.add("/baserow/data", arcname="data")
+                  if os.path.getsize(output) == 0:
+                      raise RuntimeError(f"Backup archive is empty: {output}")
+
+                  cutoff = time.time() - (14 * 24 * 60 * 60)
+                  for filename in os.listdir("/backup"):
+                      path = os.path.join("/backup", filename)
+                      if filename.startswith("baserow_data_") and filename.endswith(".tar.gz"):
+                          if os.path.isfile(path) and os.path.getmtime(path) < cutoff:
+                              os.remove(path)
+                  print(f"created {output}")
+              finally:
+                  scale(1)
+            volumeMounts:
+            - name: baserow-data
+              mountPath: /baserow/data
+              readOnly: true
+            - name: backup-data
+              mountPath: /backup
+            resources:
+              requests:
+                cpu: "50m"
+                memory: "128Mi"
+              limits:
+                cpu: "500m"
+                memory: "512Mi"
+          volumes:
+          - name: baserow-data
+            persistentVolumeClaim:
+              claimName: baserow-data
+              readOnly: true
+          - name: backup-data
+            persistentVolumeClaim:
+              claimName: baserow-backup-pvc

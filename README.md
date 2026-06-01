@@ -29,7 +29,7 @@ flowchart TD
     Argo --> LocalK3s[Local k3s Cluster<br/>Home / Lab / Internal Tools]
     Argo --> VPSK3s[VPS k3s Cluster<br/>Public Apps / Edge Services]
 
-    LocalK3s --> Apps1[Internal Apps<br/>Leantime, WiseMapping, Auth]
+    LocalK3s --> Apps1[Internal Apps<br/>Leantime, WiseMapping, Baserow, Auth]
     VPSK3s --> Apps2[Public Apps<br/>Websites, APIs, Client Services]
 
     Cloudflare[Cloudflare Tunnel / DNS] --> LocalK3s
@@ -180,6 +180,7 @@ This assumes a fresh Ubuntu/Debian host and no existing infrastructure.
    - `auth.thekeepstudios.com`
    - `projects.thekeepstudios.com`
    - `mindmaps.thekeepstudios.com`
+   - `relationships.thekeepstudios.com`
    - `grafana.thekeepstudios.com`
    - `prometheus.thekeepstudios.com`
    - `alerts.thekeepstudios.com`
