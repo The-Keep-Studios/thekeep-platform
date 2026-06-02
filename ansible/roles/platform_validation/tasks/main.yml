@@ -240,6 +240,29 @@
     gitops_revision not in loki_application_sources.stdout
   when: monitoring_enabled | default(true) | bool
 
+- name: Verify Leantime app log sidecar is reconciled
+  ansible.builtin.command:
+    argv:
+      - "{{ platform_kubectl }}"
+      - get
+      - deployment
+      - leantime
+      - -n
+      - default
+      - -o
+      - "jsonpath={range .spec.template.spec.containers[*]}container={.name}{'\\n'}{end}{range .spec.template.spec.initContainers[*]}initContainer={.name}{'\\n'}{end}{range .spec.template.spec.volumes[*]}volume={.name}{'\\n'}{end}"
+  become: true
+  become_user: k3s-admin
+  environment: "{{ platform_kubectl_env }}"
+  register: leantime_log_sidecar
+  changed_when: false
+  failed_when: >
+    leantime_log_sidecar.rc != 0 or
+    'container=leantime-app-log-tail' not in leantime_log_sidecar.stdout or
+    'initContainer=prepare-leantime-log-dir' not in leantime_log_sidecar.stdout or
+    'volume=leantime-app-logs' not in leantime_log_sidecar.stdout
+  when: monitoring_enabled | default(true) | bool
+
 - name: Verify Leantime logs dashboard is reconciled
   ansible.builtin.command:
     argv:
@@ -257,6 +280,25 @@
   register: leantime_logs_dashboard
   changed_when: false
   failed_when: leantime_logs_dashboard.rc != 0 or leantime_logs_dashboard.stdout | default('') | trim != '1'
+  when: monitoring_enabled | default(true) | bool
+
+- name: Verify Leantime logs dashboard queries app log sidecar
+  ansible.builtin.command:
+    argv:
+      - "{{ platform_kubectl }}"
+      - get
+      - configmap
+      - leantime-logs-dashboard
+      - -n
+      - monitoring
+      - -o
+      - yaml
+  become: true
+  become_user: k3s-admin
+  environment: "{{ platform_kubectl_env }}"
+  register: leantime_logs_dashboard_body
+  changed_when: false
+  failed_when: leantime_logs_dashboard_body.rc != 0 or not (leantime_logs_dashboard_body.stdout is search('leantime-app-log-tail'))
   when: monitoring_enabled | default(true) | bool
 
 - name: Verify Baserow logs dashboard is reconciled
