@@ -70,7 +70,7 @@ data:
               "refId": "A"
             }
           ],
-          "title": "Leantime Application Logs",
+          "title": "Leantime Container and Application Logs",
           "type": "logs"
         },
         {
@@ -107,7 +107,7 @@ data:
               "refId": "A"
             }
           ],
-          "title": "Leantime Errors, Mail, and Invite Events",
+          "title": "Leantime Errors, App Exceptions, Mail, and Invite Events",
           "type": "logs"
         }
       ],
@@ -169,15 +169,15 @@ data:
           {
             "current": {
               "selected": false,
-              "text": "leantime",
-              "value": "leantime"
+              "text": "leantime|leantime-app-log-tail",
+              "value": "leantime|leantime-app-log-tail"
             },
             "hide": 0,
             "label": "Container Regex",
             "multi": false,
             "name": "container",
             "options": [],
-            "query": "leantime",
+            "query": "leantime|leantime-app-log-tail",
             "skipUrlSync": false,
             "type": "textbox"
           },
@@ -205,6 +205,6 @@ data:
       "timezone": "browser",
       "title": "Leantime Logs",
       "uid": "leantime-logs",
-      "version": 1,
+      "version": 2,
       "weekStart": ""
     }

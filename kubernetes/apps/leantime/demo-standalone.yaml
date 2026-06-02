@@ -195,6 +195,22 @@ spec:
         app: leantime
     spec:
       initContainers:
+      - name: prepare-leantime-log-dir
+        image: leantime/leantime:3.8.0
+        imagePullPolicy: IfNotPresent
+        securityContext:
+          runAsUser: 0
+          runAsGroup: 0
+        command:
+        - sh
+        - -ceu
+        - |
+          mkdir -p /var/www/html/storage/logs
+          chown -R 1000:1000 /var/www/html/storage/logs
+          chmod 0775 /var/www/html/storage/logs
+        volumeMounts:
+        - name: leantime-app-logs
+          mountPath: /var/www/html/storage/logs
       - name: wait-for-mariadb
         image: mariadb:11.8.6-ubi9
         imagePullPolicy: IfNotPresent
@@ -265,6 +281,44 @@ spec:
           mountPath: /var/www/html/user/data
         - name: leantime-plugins
           mountPath: /var/www/html/app/Plugins
+        - name: leantime-app-logs
+          mountPath: /var/www/html/storage/logs
+      - name: leantime-app-log-tail
+        image: leantime/leantime:3.8.0
+        imagePullPolicy: IfNotPresent
+        command:
+        - sh
+        - -ceu
+        - |
+          log_dir=/var/www/html/storage/logs
+          mkdir -p "${log_dir}"
+          touch "${log_dir}/leantime.log" "${log_dir}/deprecations.log"
+          echo "Tailing Leantime application log files from ${log_dir}"
+          while true; do
+            current_day="$(date +%F)"
+            daily_log="${log_dir}/leantime-${current_day}.log"
+            touch "${daily_log}"
+            tail -n +1 -F \
+              "${log_dir}/leantime.log" \
+              "${log_dir}/deprecations.log" \
+              "${daily_log}" &
+            tail_pid="$!"
+            while [ "$(date +%F)" = "${current_day}" ]; do
+              sleep 300
+            done
+            kill "${tail_pid}" >/dev/null 2>&1 || true
+            wait "${tail_pid}" >/dev/null 2>&1 || true
+          done
+        volumeMounts:
+        - name: leantime-app-logs
+          mountPath: /var/www/html/storage/logs
+        resources:
+          requests:
+            cpu: "10m"
+            memory: "32Mi"
+          limits:
+            cpu: "100m"
+            memory: "128Mi"
       volumes:
       - name: leantime-vol
         persistentVolumeClaim:
@@ -272,6 +326,8 @@ spec:
       - name: leantime-plugins
         persistentVolumeClaim:
           claimName: leantime-plugins-data
+      - name: leantime-app-logs
+        emptyDir: {}
 ---
 apiVersion: v1
 kind: Service
