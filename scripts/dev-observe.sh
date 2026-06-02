@@ -86,7 +86,7 @@ app_config() {
       APP_SERVICE="baserow"
       APP_DEPLOYMENT="baserow"
       APP_PORT="${BASEROW_OBSERVE_PORT:-18082}"
-      APP_HOST="${BASEROW_PROBE_HOST:-relationships.thekeepstudios.com}"
+      APP_HOST="${BASEROW_PROBE_HOST:-baserow.thekeepstudios.com}"
       APP_PROBE_PATH="/"
       APP_PROBE_PATTERN="login|sign|create account"
       APP_CONFIG_KIND="baserow"

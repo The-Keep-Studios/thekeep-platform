@@ -41,7 +41,7 @@ local_dev_wisemapping_probe_host: mindmaps.thekeepstudios.com
 local_dev_wisemapping_wait_timeout: 10m
 local_dev_leantime_probe_host: projects.thekeepstudios.com
 local_dev_leantime_wait_timeout: 10m
-local_dev_baserow_probe_host: relationships.thekeepstudios.com
+local_dev_baserow_probe_host: baserow.thekeepstudios.com
 local_dev_baserow_wait_timeout: 15m
 local_dev_twenty_probe_host: twenty.thekeepstudios.com
 local_dev_twenty_wait_timeout: 20m

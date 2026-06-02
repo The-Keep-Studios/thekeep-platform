@@ -195,7 +195,7 @@ local app is serving a real first-run page.
 Baserow probes `http://baserow/` with:
 
 ```text
-Host: relationships.thekeepstudios.com
+Host: baserow.thekeepstudios.com
 X-Forwarded-Proto: https
 ```
 

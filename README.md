@@ -180,7 +180,7 @@ This assumes a fresh Ubuntu/Debian host and no existing infrastructure.
    - `auth.thekeepstudios.com`
    - `projects.thekeepstudios.com`
    - `mindmaps.thekeepstudios.com`
-   - `relationships.thekeepstudios.com`
+   - `baserow.thekeepstudios.com`
    - `grafana.thekeepstudios.com`
    - `prometheus.thekeepstudios.com`
    - `alerts.thekeepstudios.com`

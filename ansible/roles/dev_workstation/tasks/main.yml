@@ -175,7 +175,7 @@
     WISEMAPPING_WAIT_TIMEOUT: "{{ local_dev_wisemapping_wait_timeout | default('10m') }}"
     LEANTIME_PROBE_HOST: "{{ local_dev_leantime_probe_host | default('projects.thekeepstudios.com') }}"
     LEANTIME_WAIT_TIMEOUT: "{{ local_dev_leantime_wait_timeout | default('10m') }}"
-    BASEROW_PROBE_HOST: "{{ local_dev_baserow_probe_host | default('relationships.thekeepstudios.com') }}"
+    BASEROW_PROBE_HOST: "{{ local_dev_baserow_probe_host | default('baserow.thekeepstudios.com') }}"
     BASEROW_WAIT_TIMEOUT: "{{ local_dev_baserow_wait_timeout | default('15m') }}"
     TWENTY_PROBE_HOST: "{{ local_dev_twenty_probe_host | default('twenty.thekeepstudios.com') }}"
     TWENTY_WAIT_TIMEOUT: "{{ local_dev_twenty_wait_timeout | default('20m') }}"

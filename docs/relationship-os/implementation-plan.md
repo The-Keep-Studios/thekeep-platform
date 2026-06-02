@@ -26,7 +26,7 @@ Included:
 
 - Baserow all-in-one Kubernetes Deployment
 - PVC mounted at `/baserow/data`
-- Internal service and Traefik Ingress for `relationships.thekeepstudios.com`
+- Internal service and Traefik Ingress for `baserow.thekeepstudios.com`
 - Argo CD app registration as `platform-baserow`
 - Daily quiet-window backup CronJob
 - Restore runbook
@@ -48,11 +48,11 @@ Excluded:
 ## Rollout Checklist
 
 1. Create the Cloudflare Tunnel public hostname:
-   - Hostname: `relationships.thekeepstudios.com`
+   - Hostname: `baserow.thekeepstudios.com`
    - Service type: `HTTPS`
    - Service URL: `traefik.kube-system.svc.cluster.local`
    - Origin setting: `No TLS Verify`
-2. Add Cloudflare Access in front of `relationships.thekeepstudios.com`.
+2. Add Cloudflare Access in front of `baserow.thekeepstudios.com`.
 3. Apply or sync the `platform-baserow` Argo CD application.
 4. Wait for:
    - `application/platform-baserow` to become `Synced Healthy`
