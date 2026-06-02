@@ -38,7 +38,7 @@ spec:
         imagePullPolicy: IfNotPresent
         env:
         - name: BASEROW_PUBLIC_URL
-          value: https://relationships.thekeepstudios.com
+          value: https://baserow.thekeepstudios.com
         - name: BASEROW_RUN_MINIMAL
           value: "yes"
         - name: BASEROW_AMOUNT_OF_WORKERS
@@ -56,7 +56,7 @@ spec:
             port: http
             httpHeaders:
             - name: Host
-              value: relationships.thekeepstudios.com
+              value: baserow.thekeepstudios.com
             - name: X-Forwarded-Proto
               value: https
           failureThreshold: 60
@@ -68,7 +68,7 @@ spec:
             port: http
             httpHeaders:
             - name: Host
-              value: relationships.thekeepstudios.com
+              value: baserow.thekeepstudios.com
             - name: X-Forwarded-Proto
               value: https
           periodSeconds: 15
@@ -80,7 +80,7 @@ spec:
             port: http
             httpHeaders:
             - name: Host
-              value: relationships.thekeepstudios.com
+              value: baserow.thekeepstudios.com
             - name: X-Forwarded-Proto
               value: https
           periodSeconds: 30
@@ -125,7 +125,7 @@ metadata:
     traefik.ingress.kubernetes.io/service.serversscheme: http
 spec:
   rules:
-  - host: relationships.thekeepstudios.com
+  - host: baserow.thekeepstudios.com
     http:
       paths:
       - path: /

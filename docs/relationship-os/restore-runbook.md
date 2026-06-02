@@ -127,7 +127,7 @@ kubectl rollout status deployment/baserow -n baserow --timeout=10m
 ```bash
 kubectl run -n baserow baserow-curl --rm -i --restart=Never \
   --image=curlimages/curl:8.8.0 -- \
-  sh -ceu 'curl -fsS -H "Host: relationships.thekeepstudios.com" -H "X-Forwarded-Proto: https" http://baserow/ | head'
+  sh -ceu 'curl -fsS -H "Host: baserow.thekeepstudios.com" -H "X-Forwarded-Proto: https" http://baserow/ | head'
 ```
 
 ## Gaps

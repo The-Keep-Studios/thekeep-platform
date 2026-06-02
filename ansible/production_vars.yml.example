@@ -75,7 +75,7 @@ platform_secrets:
 #   - "http://auth.thekeepstudios.com"
 #   - "http://projects.thekeepstudios.com"
 #   - "http://mindmaps.thekeepstudios.com"
-#   - "http://relationships.thekeepstudios.com"
+#   - "http://baserow.thekeepstudios.com"
 #   - "http://grafana.thekeepstudios.com"
 #   - "http://prometheus.thekeepstudios.com"
 #   - "http://alerts.thekeepstudios.com"
