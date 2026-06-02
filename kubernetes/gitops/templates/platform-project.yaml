@@ -21,6 +21,12 @@ spec:
     server: https://kubernetes.default.svc
   - namespace: wisemapping
     server: https://kubernetes.default.svc
+  - namespace: baserow
+    server: https://kubernetes.default.svc
+  - namespace: twenty
+    server: https://kubernetes.default.svc
+  - namespace: espocrm
+    server: https://kubernetes.default.svc
   - namespace: monitoring
     server: https://kubernetes.default.svc
   - namespace: kube-system
