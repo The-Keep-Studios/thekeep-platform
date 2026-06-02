@@ -159,7 +159,7 @@ spec:
           done
       containers:
       - name: leantime
-        image: leantime/leantime:3.7.3
+        image: leantime/leantime:3.8.0
         imagePullPolicy: IfNotPresent
         envFrom:
         - configMapRef:
