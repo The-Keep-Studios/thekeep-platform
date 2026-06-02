@@ -177,7 +177,7 @@ smoke_leantime() {
 }
 
 smoke_baserow() {
-  local probe_host="${BASEROW_PROBE_HOST:-relationships.thekeepstudios.com}"
+  local probe_host="${BASEROW_PROBE_HOST:-baserow.thekeepstudios.com}"
   local wait_timeout="${BASEROW_WAIT_TIMEOUT:-${DEFAULT_WAIT_TIMEOUT}}"
   local probe_name
   local probe_output

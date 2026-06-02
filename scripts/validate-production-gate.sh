@@ -21,7 +21,7 @@ HTTPS_ENDPOINTS=(
   https://auth.thekeepstudios.com
   https://projects.thekeepstudios.com
   https://mindmaps.thekeepstudios.com
-  https://relationships.thekeepstudios.com
+  https://baserow.thekeepstudios.com
   https://grafana.thekeepstudios.com
   https://prometheus.thekeepstudios.com
   https://alerts.thekeepstudios.com
