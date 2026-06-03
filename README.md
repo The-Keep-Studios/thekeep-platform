@@ -412,6 +412,7 @@ kubectl annotate application platform-root -n argocd \
 ### OIDC Notes
 
 Authentik is the intended internal identity hub. Configure Google once in Authentik upstream.
+For the platform-wide forward-auth path, see `docs/authentik-sso.md`.
 
 Callback URLs:
 

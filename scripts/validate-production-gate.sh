@@ -92,6 +92,20 @@ check_cloudflare_tunnel() {
   fi
 }
 
+check_authentik_forward_auth() {
+  if kadmin get middleware authentik-forward-auth -n identity >/dev/null 2>&1; then
+    pass "Authentik forward-auth middleware exists"
+  else
+    fail "Authentik forward-auth middleware is missing"
+  fi
+
+  if kadmin get ingress authentik-forward-auth-outpost-routes -n identity >/dev/null 2>&1; then
+    pass "Authentik forward-auth outpost routes exist"
+  else
+    fail "Authentik forward-auth outpost routes are missing"
+  fi
+}
+
 check_backup_resources() {
   if kadmin get cronjob leantime-db-backup -n default >/dev/null 2>&1; then
     pass "Leantime backup CronJob exists"
@@ -179,6 +193,7 @@ check_direct_http_urls() {
 
 check_cluster
 check_cloudflare_tunnel
+check_authentik_forward_auth
 check_argocd_apps
 check_backup_resources
 check_https_endpoints

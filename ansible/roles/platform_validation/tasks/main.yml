@@ -136,6 +136,42 @@
   changed_when: false
   failed_when: cf_deploy.rc != 0 or (cf_deploy.stdout | default('0') | trim | int) == 0
 
+- name: Check Authentik forward-auth middleware
+  ansible.builtin.command:
+    argv:
+      - "{{ platform_kubectl }}"
+      - get
+      - middleware
+      - authentik-forward-auth
+      - -n
+      - identity
+      - -o
+      - "jsonpath={.metadata.name}"
+  become: true
+  become_user: k3s-admin
+  environment: "{{ platform_kubectl_env }}"
+  register: authentik_forward_auth_middleware
+  changed_when: false
+  failed_when: authentik_forward_auth_middleware.rc != 0 or authentik_forward_auth_middleware.stdout | default('') | trim != 'authentik-forward-auth'
+
+- name: Check Authentik forward-auth outpost routes
+  ansible.builtin.command:
+    argv:
+      - "{{ platform_kubectl }}"
+      - get
+      - ingress
+      - authentik-forward-auth-outpost-routes
+      - -n
+      - identity
+      - -o
+      - "jsonpath={.metadata.name}"
+  become: true
+  become_user: k3s-admin
+  environment: "{{ platform_kubectl_env }}"
+  register: authentik_forward_auth_outpost_routes
+  changed_when: false
+  failed_when: authentik_forward_auth_outpost_routes.rc != 0 or authentik_forward_auth_outpost_routes.stdout | default('') | trim != 'authentik-forward-auth-outpost-routes'
+
 - name: Check Leantime backup CronJob
   ansible.builtin.command:
     argv:
