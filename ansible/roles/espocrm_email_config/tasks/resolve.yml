@@ -1,0 +1,60 @@
+- name: Define EspoCRM email configuration source
+  ansible.builtin.set_fact:
+    espocrm_email_config_source: "{{ (platform_optional_apps | default({})).espocrm | default({}) }}"
+
+- name: Detect EspoCRM email allowlist inputs
+  ansible.builtin.set_fact:
+    espocrm_email_config_profile_name: >-
+      {{
+        espocrm_email_config_profile |
+        default(
+          espocrm_email_server_allowlist_profile |
+          default(
+            espocrm_email_config_source.email_server_allowlist_profile |
+            default(
+              espocrm_email_config_source.email_server_allowed_address_profile |
+              default('')
+            )
+          )
+        ) |
+        string |
+        trim
+      }}
+    espocrm_email_config_has_direct_list: >-
+      {{
+        (espocrm_email_config_allowed_address_list is defined) or
+        (espocrm_email_config_source.email_server_allowed_address_list is defined)
+      }}
+
+- name: Fail if EspoCRM email profile and explicit allowlist are both configured
+  ansible.builtin.fail:
+    msg: "Set either an EspoCRM email allowlist profile or email_server_allowed_address_list, not both."
+  when:
+    - espocrm_email_config_profile_name | length > 0
+    - espocrm_email_config_has_direct_list | bool
+
+- name: Resolve EspoCRM email allowlist from profile
+  ansible.builtin.set_fact:
+    espocrm_email_server_allowed_address_list: "{{ espocrm_email_config_profiles[espocrm_email_config_profile_name] }}"
+  when:
+    - espocrm_email_config_profile_name | length > 0
+    - not (espocrm_email_config_has_direct_list | bool)
+    - espocrm_email_config_profile_name in espocrm_email_config_profiles
+
+- name: Resolve EspoCRM email allowlist from explicit list
+  ansible.builtin.set_fact:
+    espocrm_email_server_allowed_address_list: >-
+      {{
+        espocrm_email_config_allowed_address_list
+        if (espocrm_email_config_allowed_address_list is defined)
+        else espocrm_email_config_source.email_server_allowed_address_list
+      }}
+  when: espocrm_email_config_has_direct_list | bool
+
+- name: Define whether EspoCRM email configuration is requested
+  ansible.builtin.set_fact:
+    espocrm_email_config_is_requested: >-
+      {{
+        (espocrm_email_config_profile_name | length > 0) or
+        (espocrm_email_config_has_direct_list | bool)
+      }}

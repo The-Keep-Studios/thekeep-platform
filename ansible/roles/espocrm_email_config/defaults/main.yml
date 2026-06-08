@@ -1,0 +1,12 @@
+espocrm_email_config_namespace: espocrm
+espocrm_email_config_kubectl: "{{ platform_kubectl | default('/usr/local/bin/kubectl') }}"
+espocrm_email_config_kubectl_env: "{{ platform_kubectl_env | default({'KUBECONFIG': '/home/k3s-admin/.kube/config'}) }}"
+espocrm_email_config_force: false
+espocrm_email_config_verify_effective: false
+espocrm_email_config_verify_connectivity: false
+
+espocrm_email_config_profiles:
+  gmail:
+    - imap.gmail.com:993
+    - smtp.gmail.com:587
+    - smtp.gmail.com:465

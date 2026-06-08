@@ -72,8 +72,26 @@ platform_optional_apps:
 Add only the secrets required by the enabled app.
 
 EspoCRM can optionally manage `emailServerAllowedAddressList` from
-`ansible/production_vars.yml`. Entries must be exact `host:port` pairs;
-wildcards are rejected.
+`ansible/production_vars.yml`. The built-in `gmail` profile expands to the
+exact Gmail and Google Workspace mail endpoints:
+
+```yaml
+platform_optional_apps:
+  espocrm:
+    enabled: true
+    email_server_allowlist_profile: gmail
+```
+
+The profile allows only:
+
+```text
+imap.gmail.com:993
+smtp.gmail.com:587
+smtp.gmail.com:465
+```
+
+For another provider, use a custom list of exact `host:port` pairs. Wildcards
+are rejected.
 
 ```yaml
 platform_optional_apps:
@@ -84,9 +102,25 @@ platform_optional_apps:
       - "smtp.example.com:587"
 ```
 
-Omit `email_server_allowed_address_list` to leave the EspoCRM setting
-unmanaged. Set it to `[]` to explicitly clear an allowlist previously managed
-through this playbook.
+Set either `email_server_allowlist_profile` or
+`email_server_allowed_address_list`, not both. Omit both values to leave the
+EspoCRM setting unmanaged. Set `email_server_allowed_address_list: []` to
+explicitly clear an allowlist previously managed through this playbook.
+
+For an already-running EspoCRM deployment, apply only the email configuration
+without running the full platform setup:
+
+```bash
+ansible-playbook -K \
+  -i ansible/inventory.production.ini \
+  ansible/configure_espocrm_email.yml
+```
+
+The focused playbook applies the merged EspoCRM manifests, updates the runtime
+configuration, restarts the web and daemon deployments when needed, verifies
+the effective EspoCRM setting, and tests connectivity to every configured
+endpoint. For a one-time profile selection that is not stored in
+`production_vars.yml`, pass `-e espocrm_email_config_profile=gmail`.
 
 Twenty:
 
