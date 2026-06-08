@@ -352,6 +352,29 @@ spec:
       X-Forwarded-Proto: "https"
       X-Forwarded-Ssl: "on"
 ---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: authentik-forward-auth
+  namespace: identity
+spec:
+  forwardAuth:
+    address: http://authentik.identity.svc.cluster.local/outpost.goauthentik.io/auth/traefik
+    trustForwardHeader: true
+    authResponseHeaders:
+    - X-authentik-username
+    - X-authentik-groups
+    - X-authentik-entitlements
+    - X-authentik-email
+    - X-authentik-name
+    - X-authentik-uid
+    - X-authentik-jwt
+    - X-authentik-meta-jwks
+    - X-authentik-meta-outpost
+    - X-authentik-meta-provider
+    - X-authentik-meta-app
+    - X-authentik-meta-version
+---
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -366,6 +389,96 @@ spec:
     http:
       paths:
       - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: authentik
+            port:
+              number: 80
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: authentik-forward-auth-outpost-routes
+  namespace: identity
+  annotations:
+    traefik.ingress.kubernetes.io/service.serversscheme: http
+spec:
+  rules:
+  - host: projects.thekeepstudios.com
+    http:
+      paths:
+      - path: /outpost.goauthentik.io
+        pathType: Prefix
+        backend:
+          service:
+            name: authentik
+            port:
+              number: 80
+  - host: mindmaps.thekeepstudios.com
+    http:
+      paths:
+      - path: /outpost.goauthentik.io
+        pathType: Prefix
+        backend:
+          service:
+            name: authentik
+            port:
+              number: 80
+  - host: baserow.thekeepstudios.com
+    http:
+      paths:
+      - path: /outpost.goauthentik.io
+        pathType: Prefix
+        backend:
+          service:
+            name: authentik
+            port:
+              number: 80
+  - host: espocrm.thekeepstudios.com
+    http:
+      paths:
+      - path: /outpost.goauthentik.io
+        pathType: Prefix
+        backend:
+          service:
+            name: authentik
+            port:
+              number: 80
+  - host: grafana.thekeepstudios.com
+    http:
+      paths:
+      - path: /outpost.goauthentik.io
+        pathType: Prefix
+        backend:
+          service:
+            name: authentik
+            port:
+              number: 80
+  - host: prometheus.thekeepstudios.com
+    http:
+      paths:
+      - path: /outpost.goauthentik.io
+        pathType: Prefix
+        backend:
+          service:
+            name: authentik
+            port:
+              number: 80
+  - host: alerts.thekeepstudios.com
+    http:
+      paths:
+      - path: /outpost.goauthentik.io
+        pathType: Prefix
+        backend:
+          service:
+            name: authentik
+            port:
+              number: 80
+  - host: argocd.thekeepstudios.com
+    http:
+      paths:
+      - path: /outpost.goauthentik.io
         pathType: Prefix
         backend:
           service:
