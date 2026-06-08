@@ -1,0 +1,292 @@
+- name: Validate EspoCRM email configuration
+  ansible.builtin.import_tasks: validate.yml
+
+- name: Fail if focused EspoCRM email configuration has no selected profile or list
+  ansible.builtin.fail:
+    msg: >-
+      No EspoCRM email configuration was selected. Set
+      platform_optional_apps.espocrm.email_server_allowlist_profile,
+      platform_optional_apps.espocrm.email_server_allowed_address_list,
+      or pass -e espocrm_email_config_profile=gmail.
+  when:
+    - espocrm_email_config_force | bool
+    - not (espocrm_email_config_is_requested | bool)
+
+- name: Determine whether EspoCRM email configuration should be applied
+  ansible.builtin.set_fact:
+    espocrm_email_config_should_apply: >-
+      {{
+        (espocrm_email_config_is_requested | bool) and
+        (
+          (espocrm_email_config_force | bool) or
+          (espocrm_email_config_source.enabled | default(false) | bool)
+        )
+      }}
+
+- name: Define EspoCRM email server allowlist hash
+  ansible.builtin.set_fact:
+    espocrm_email_server_allowed_address_list_hash: "{{ espocrm_email_server_allowed_address_list | to_json | hash('sha256') }}"
+  when: espocrm_email_config_should_apply | bool
+
+- name: Read applied EspoCRM email server allowlist configuration hash
+  ansible.builtin.command:
+    argv:
+      - "{{ espocrm_email_config_kubectl }}"
+      - get
+      - configmap
+      - espocrm-runtime-config-state
+      - -n
+      - "{{ espocrm_email_config_namespace }}"
+      - -o
+      - "jsonpath={.data.emailServerAllowedAddressListHash}"
+  become: true
+  become_user: k3s-admin
+  environment: "{{ espocrm_email_config_kubectl_env }}"
+  register: espocrm_runtime_config_state
+  changed_when: false
+  failed_when: false
+  when: espocrm_email_config_should_apply | bool
+
+- name: Apply EspoCRM runtime email configuration
+  ansible.builtin.command:
+    argv:
+      - "{{ espocrm_email_config_kubectl }}"
+      - apply
+      - -f
+      - "-"
+  args:
+    stdin: >-
+      {{
+        {
+          'apiVersion': 'v1',
+          'kind': 'ConfigMap',
+          'metadata': {
+            'name': 'espocrm-runtime-config',
+            'namespace': espocrm_email_config_namespace
+          },
+          'data': {
+            'email-server-allowed-address-list.json': espocrm_email_server_allowed_address_list | to_json
+          }
+        } | to_nice_yaml
+      }}
+  become: true
+  become_user: k3s-admin
+  environment: "{{ espocrm_email_config_kubectl_env }}"
+  register: espocrm_runtime_config_apply
+  changed_when: >
+    'created' in espocrm_runtime_config_apply.stdout or
+    'configured' in espocrm_runtime_config_apply.stdout
+  when: espocrm_email_config_should_apply | bool
+
+- name: Determine whether EspoCRM runtime email configuration requires a restart
+  ansible.builtin.set_fact:
+    espocrm_runtime_config_restart_required: >-
+      {{
+        (espocrm_runtime_config_apply.changed | default(false)) or
+        (
+          espocrm_runtime_config_state.stdout | default('') | trim !=
+          espocrm_email_server_allowed_address_list_hash
+        )
+      }}
+  when: espocrm_email_config_should_apply | bool
+
+- name: Wait for EspoCRM deployments before applying runtime email configuration
+  ansible.builtin.command:
+    argv:
+      - "{{ espocrm_email_config_kubectl }}"
+      - get
+      - deployment
+      - espocrm
+      - espocrm-daemon
+      - -n
+      - "{{ espocrm_email_config_namespace }}"
+  become: true
+  become_user: k3s-admin
+  environment: "{{ espocrm_email_config_kubectl_env }}"
+  register: espocrm_runtime_config_deployments
+  until: espocrm_runtime_config_deployments.rc == 0
+  retries: 60
+  delay: 5
+  changed_when: false
+  when:
+    - espocrm_email_config_should_apply | bool
+    - espocrm_runtime_config_restart_required | bool
+
+- name: Restart EspoCRM pods after runtime email configuration changes
+  ansible.builtin.command:
+    argv:
+      - "{{ espocrm_email_config_kubectl }}"
+      - delete
+      - pod
+      - -l
+      - app=espocrm
+      - -n
+      - "{{ espocrm_email_config_namespace }}"
+      - --ignore-not-found=true
+      - --wait=false
+  become: true
+  become_user: k3s-admin
+  environment: "{{ espocrm_email_config_kubectl_env }}"
+  when:
+    - espocrm_email_config_should_apply | bool
+    - espocrm_runtime_config_restart_required | bool
+
+- name: Wait for EspoCRM after runtime email configuration changes
+  ansible.builtin.command:
+    argv:
+      - "{{ espocrm_email_config_kubectl }}"
+      - rollout
+      - status
+      - "deployment/{{ item }}"
+      - -n
+      - "{{ espocrm_email_config_namespace }}"
+      - --timeout=300s
+  become: true
+  become_user: k3s-admin
+  environment: "{{ espocrm_email_config_kubectl_env }}"
+  loop:
+    - espocrm
+    - espocrm-daemon
+  changed_when: false
+  when: espocrm_email_config_should_apply | bool
+
+- name: Persist EspoCRM runtime email configuration hash
+  ansible.builtin.command:
+    argv:
+      - "{{ espocrm_email_config_kubectl }}"
+      - apply
+      - -f
+      - "-"
+  args:
+    stdin: >-
+      {{
+        {
+          'apiVersion': 'v1',
+          'kind': 'ConfigMap',
+          'metadata': {
+            'name': 'espocrm-runtime-config-state',
+            'namespace': espocrm_email_config_namespace
+          },
+          'data': {
+            'emailServerAllowedAddressListHash': espocrm_email_server_allowed_address_list_hash
+          }
+        } | to_nice_yaml
+      }}
+  become: true
+  become_user: k3s-admin
+  environment: "{{ espocrm_email_config_kubectl_env }}"
+  when:
+    - espocrm_email_config_should_apply | bool
+    - espocrm_runtime_config_restart_required | bool
+
+- name: Find EspoCRM web pod for runtime email verification
+  ansible.builtin.command:
+    argv:
+      - "{{ espocrm_email_config_kubectl }}"
+      - get
+      - pod
+      - -n
+      - "{{ espocrm_email_config_namespace }}"
+      - -l
+      - app=espocrm,component=web
+      - -o
+      - "jsonpath={.items[0].metadata.name}"
+  become: true
+  become_user: k3s-admin
+  environment: "{{ espocrm_email_config_kubectl_env }}"
+  register: espocrm_email_config_web_pod
+  changed_when: false
+  when:
+    - espocrm_email_config_should_apply | bool
+    - (espocrm_email_config_verify_effective | bool) or (espocrm_email_config_verify_connectivity | bool)
+
+- name: Verify effective EspoCRM email server allowlist
+  ansible.builtin.command:
+    argv:
+      - "{{ espocrm_email_config_kubectl }}"
+      - exec
+      - -n
+      - "{{ espocrm_email_config_namespace }}"
+      - "{{ espocrm_email_config_web_pod.stdout }}"
+      - -c
+      - espocrm
+      - --
+      - php
+      - -r
+      - |
+        require_once "/var/www/html/bootstrap.php";
+        $app = new Espo\Core\Application();
+        echo json_encode(
+            $app->getContainer()->get("config")->get("emailServerAllowedAddressList"),
+            JSON_UNESCAPED_SLASHES
+        );
+  become: true
+  become_user: k3s-admin
+  environment: "{{ espocrm_email_config_kubectl_env }}"
+  register: espocrm_email_config_effective_allowlist
+  changed_when: false
+  failed_when: >
+    espocrm_email_config_effective_allowlist.rc != 0 or
+    (espocrm_email_config_effective_allowlist.stdout | trim) !=
+    (espocrm_email_server_allowed_address_list | to_json)
+  when:
+    - espocrm_email_config_should_apply | bool
+    - espocrm_email_config_verify_effective | bool
+
+- name: Verify EspoCRM outbound email endpoint connectivity
+  ansible.builtin.command:
+    argv:
+      - "{{ espocrm_email_config_kubectl }}"
+      - exec
+      - -n
+      - "{{ espocrm_email_config_namespace }}"
+      - "{{ espocrm_email_config_web_pod.stdout }}"
+      - -c
+      - espocrm
+      - --
+      - php
+      - -r
+      - |
+        $addresses = json_decode($argv[1], true, 512, JSON_THROW_ON_ERROR);
+
+        foreach ($addresses as $address) {
+            $separator = strrpos($address, ":");
+            $host = substr($address, 0, $separator);
+            $port = (int) substr($address, $separator + 1);
+            $scheme = in_array($port, [465, 993], true) ? "ssl" : "tcp";
+            $uri = "$scheme://$host:$port";
+            $errno = 0;
+            $error = "";
+            $socket = @stream_socket_client($uri, $errno, $error, 15);
+
+            if (!$socket) {
+                fwrite(STDERR, "$address FAIL $errno $error\n");
+                exit(1);
+            }
+
+            echo "$address OK\n";
+            fclose($socket);
+        }
+      - "{{ espocrm_email_server_allowed_address_list | to_json }}"
+  become: true
+  become_user: k3s-admin
+  environment: "{{ espocrm_email_config_kubectl_env }}"
+  register: espocrm_email_config_connectivity
+  changed_when: false
+  when:
+    - espocrm_email_config_should_apply | bool
+    - espocrm_email_config_verify_connectivity | bool
+
+- name: Report EspoCRM outbound email endpoint connectivity
+  ansible.builtin.debug:
+    msg: "{{ espocrm_email_config_connectivity.stdout_lines }}"
+  when:
+    - espocrm_email_config_should_apply | bool
+    - espocrm_email_config_verify_connectivity | bool
+
+- name: Report active EspoCRM email server allowlist
+  ansible.builtin.debug:
+    msg: "EspoCRM email server allowlist is active: {{ espocrm_email_server_allowed_address_list | join(', ') }}"
+  when:
+    - espocrm_email_config_should_apply | bool
+    - espocrm_email_config_verify_effective | bool

@@ -1,0 +1,59 @@
+- name: Configure EspoCRM Email Integration
+  hosts: k3s_control_plane
+  become: true
+  gather_facts: false
+  pre_tasks:
+    - name: Check for production vars file
+      ansible.builtin.stat:
+        path: "{{ playbook_dir }}/production_vars.yml"
+      register: espocrm_email_prod_vars_stat
+      delegate_to: localhost
+      become: false
+      tags: [always]
+
+    - name: Load production variables when present
+      ansible.builtin.include_vars:
+        file: "{{ playbook_dir }}/production_vars.yml"
+      when: espocrm_email_prod_vars_stat.stat.exists
+      tags: [always]
+
+    - name: Define kubectl execution context
+      ansible.builtin.set_fact:
+        platform_kubectl: /usr/local/bin/kubectl
+        platform_kubectl_env:
+          KUBECONFIG: /home/k3s-admin/.kube/config
+      tags: [always]
+
+    - name: Render merged EspoCRM manifests
+      ansible.builtin.command:
+        argv:
+          - kubectl
+          - kustomize
+          - "{{ playbook_dir }}/../kubernetes/apps/espocrm"
+      delegate_to: localhost
+      become: false
+      register: espocrm_email_rendered_manifests
+      changed_when: false
+      tags: [espocrm, email]
+
+    - name: Apply merged EspoCRM manifests
+      ansible.builtin.command:
+        argv:
+          - "{{ platform_kubectl }}"
+          - apply
+          - -f
+          - "-"
+      args:
+        stdin: "{{ espocrm_email_rendered_manifests.stdout }}"
+      become: true
+      become_user: k3s-admin
+      environment: "{{ platform_kubectl_env }}"
+      tags: [espocrm, email]
+
+  roles:
+    - role: espocrm_email_config
+      vars:
+        espocrm_email_config_force: true
+        espocrm_email_config_verify_effective: true
+        espocrm_email_config_verify_connectivity: true
+      tags: [espocrm, email]

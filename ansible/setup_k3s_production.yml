@@ -96,41 +96,10 @@
         platform_optional_espocrm_enabled: "{{ ((platform_optional_apps | default({})).espocrm | default({})).enabled | default(false) | bool }}"
       tags: [always]
 
-    - name: Fail if EspoCRM email server allowlist is not a list
-      ansible.builtin.fail:
-        msg: "platform_optional_apps.espocrm.email_server_allowed_address_list must be a YAML list of exact host:port strings."
-      when:
-        - ((platform_optional_apps | default({})).espocrm | default({})).email_server_allowed_address_list is defined
-        - ((platform_optional_apps | default({})).espocrm | default({})).email_server_allowed_address_list | type_debug != "list"
-      tags: [always]
-
-    - name: Fail if EspoCRM email server allowlist contains invalid entries
-      ansible.builtin.fail:
-        msg: "Invalid EspoCRM email server allowlist entry '{{ item }}'. Use exact host:port values only; wildcards are not allowed."
-      vars:
-        espocrm_email_server_address: "{{ item | string | trim }}"
-        espocrm_email_server_port: "{{ espocrm_email_server_address | regex_replace('^.*:', '') }}"
-      loop: "{{ ((platform_optional_apps | default({})).espocrm | default({})).email_server_allowed_address_list | default([]) }}"
-      when: >
-        (((platform_optional_apps | default({})).espocrm | default({})).email_server_allowed_address_list is defined) and
-        (
-          (item | type_debug != "str") or
-          (espocrm_email_server_address != item) or
-          ('*' in espocrm_email_server_address) or
-          (not (espocrm_email_server_address is match('^(?:\\[[0-9A-Fa-f:.]+\\]|[A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?):[0-9]{1,5}$'))) or
-          ((espocrm_email_server_port | int) < 1) or
-          ((espocrm_email_server_port | int) > 65535)
-        )
-      tags: [always]
-
-    - name: Fail if EspoCRM email server allowlist contains duplicates
-      ansible.builtin.fail:
-        msg: "platform_optional_apps.espocrm.email_server_allowed_address_list contains duplicate entries."
-      vars:
-        espocrm_email_server_allowed_address_list: "{{ ((platform_optional_apps | default({})).espocrm | default({})).email_server_allowed_address_list | default([]) }}"
-      when:
-        - ((platform_optional_apps | default({})).espocrm | default({})).email_server_allowed_address_list is defined
-        - espocrm_email_server_allowed_address_list | unique | length != espocrm_email_server_allowed_address_list | length
+    - name: Validate EspoCRM email configuration
+      ansible.builtin.import_role:
+        name: espocrm_email_config
+        tasks_from: validate
       tags: [always]
 
     - name: Define required optional CRM secret keys

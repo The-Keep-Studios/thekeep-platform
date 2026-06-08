@@ -34,8 +34,9 @@ platform_secrets:
 #     enabled: false
 #   espocrm:
 #     enabled: false
-#     # Optional. Exact host:port entries only; wildcards are rejected.
-#     # Omit this key to leave the EspoCRM setting unmanaged.
+#     # Optional preset. Currently supported: gmail.
+#     email_server_allowlist_profile: gmail
+#     # Or provide a custom exact list instead. Wildcards are rejected.
 #     email_server_allowed_address_list:
 #       - "imap.example.com:993"
 #       - "smtp.example.com:587"

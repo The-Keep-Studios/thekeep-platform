@@ -1,0 +1,42 @@
+- name: Resolve EspoCRM email configuration
+  ansible.builtin.import_tasks: resolve.yml
+
+- name: Fail if EspoCRM email allowlist profile is unknown
+  ansible.builtin.fail:
+    msg: "Unknown EspoCRM email allowlist profile '{{ espocrm_email_config_profile_name }}'. Available profiles: {{ espocrm_email_config_profiles.keys() | list | join(', ') }}"
+  when:
+    - espocrm_email_config_profile_name | length > 0
+    - not (espocrm_email_config_has_direct_list | bool)
+    - espocrm_email_config_profile_name not in espocrm_email_config_profiles
+
+- name: Fail if EspoCRM email server allowlist is not a list
+  ansible.builtin.fail:
+    msg: "EspoCRM email server allowlist must be a YAML list of exact host:port strings."
+  when:
+    - espocrm_email_config_is_requested | bool
+    - (espocrm_email_server_allowed_address_list | default(None) | type_debug) != "list"
+
+- name: Fail if EspoCRM email server allowlist contains invalid entries
+  ansible.builtin.fail:
+    msg: "Invalid EspoCRM email server allowlist entry '{{ item }}'. Use exact host:port values only; wildcards are not allowed."
+  vars:
+    espocrm_email_server_address: "{{ item | string | trim }}"
+    espocrm_email_server_port: "{{ espocrm_email_server_address | regex_replace('^.*:', '') }}"
+  loop: "{{ espocrm_email_server_allowed_address_list | default([]) }}"
+  when: >
+    (espocrm_email_config_is_requested | bool) and
+    (
+      (item | type_debug != "str") or
+      (espocrm_email_server_address != item) or
+      ('*' in espocrm_email_server_address) or
+      (not (espocrm_email_server_address is match('^(?:\\[[0-9A-Fa-f:.]+\\]|[A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?):[0-9]{1,5}$'))) or
+      ((espocrm_email_server_port | int) < 1) or
+      ((espocrm_email_server_port | int) > 65535)
+    )
+
+- name: Fail if EspoCRM email server allowlist contains duplicates
+  ansible.builtin.fail:
+    msg: "EspoCRM email server allowlist contains duplicate entries."
+  when:
+    - espocrm_email_config_is_requested | bool
+    - (espocrm_email_server_allowed_address_list | unique | length) != (espocrm_email_server_allowed_address_list | length)
