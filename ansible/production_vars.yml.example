@@ -34,6 +34,11 @@ platform_secrets:
 #     enabled: false
 #   espocrm:
 #     enabled: false
+#     # Optional. Exact host:port entries only; wildcards are rejected.
+#     # Omit this key to leave the EspoCRM setting unmanaged.
+#     email_server_allowed_address_list:
+#       - "imap.example.com:993"
+#       - "smtp.example.com:587"
 
 # Optional: enable these only when gitops_repo_private is true.
 # gitops_repo_ssh_private_key_path: "/path/to/argocd-readonly-key"
