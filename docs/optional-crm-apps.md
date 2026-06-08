@@ -71,6 +71,23 @@ platform_optional_apps:
 
 Add only the secrets required by the enabled app.
 
+EspoCRM can optionally manage `emailServerAllowedAddressList` from
+`ansible/production_vars.yml`. Entries must be exact `host:port` pairs;
+wildcards are rejected.
+
+```yaml
+platform_optional_apps:
+  espocrm:
+    enabled: true
+    email_server_allowed_address_list:
+      - "imap.example.com:993"
+      - "smtp.example.com:587"
+```
+
+Omit `email_server_allowed_address_list` to leave the EspoCRM setting
+unmanaged. Set it to `[]` to explicitly clear an allowlist previously managed
+through this playbook.
+
 Twenty:
 
 ```yaml

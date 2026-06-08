@@ -27,6 +27,79 @@ spec:
     requests:
       storage: 10Gi
 ---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: espocrm-runtime-config-loader
+  namespace: espocrm
+data:
+  apply-runtime-config.php: |
+    <?php
+
+    $inputPath = '/config/email-server-allowed-address-list.json';
+    $targetPath = '/var/www/html/data/config-internal-override.php';
+    $targetDirectory = dirname($targetPath);
+
+    if (!is_file($inputPath)) {
+        exit(0);
+    }
+
+    if (!is_dir($targetDirectory) && !mkdir($targetDirectory, 0775, true) && !is_dir($targetDirectory)) {
+        throw new RuntimeException('Could not create the EspoCRM data directory.');
+    }
+
+    $list = json_decode(file_get_contents($inputPath), true, 512, JSON_THROW_ON_ERROR);
+
+    if (!is_array($list)) {
+        throw new RuntimeException('EspoCRM email server allowlist must be a JSON array.');
+    }
+
+    foreach ($list as $item) {
+        if (!is_string($item)) {
+            throw new RuntimeException('EspoCRM email server allowlist entries must be strings.');
+        }
+    }
+
+    $config = [];
+
+    if (is_file($targetPath)) {
+        $loadedConfig = include $targetPath;
+
+        if (!is_array($loadedConfig)) {
+            throw new RuntimeException('Existing EspoCRM internal override config must return an array.');
+        }
+
+        $config = $loadedConfig;
+    }
+
+    $config['emailServerAllowedAddressList'] = array_values($list);
+
+    $tmpPath = tempnam($targetDirectory, '.config-internal-override.');
+
+    if ($tmpPath === false) {
+        throw new RuntimeException('Could not create a temporary EspoCRM config file.');
+    }
+
+    $contents = "<?php\n\nreturn " . var_export($config, true) . ";\n";
+
+    try {
+        if (file_put_contents($tmpPath, $contents, LOCK_EX) === false) {
+            throw new RuntimeException('Could not write the EspoCRM config override.');
+        }
+
+        if (!rename($tmpPath, $targetPath)) {
+            throw new RuntimeException('Could not replace the EspoCRM config override.');
+        }
+
+        if (!chmod($targetPath, 0644)) {
+            throw new RuntimeException('Could not set permissions on the EspoCRM config override.');
+        }
+    } finally {
+        if (is_file($tmpPath)) {
+            unlink($tmpPath);
+        }
+    }
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -132,6 +205,22 @@ spec:
         app: espocrm
         component: web
     spec:
+      initContainers:
+      - name: espocrm-runtime-config
+        image: espocrm/espocrm:9.3.8
+        imagePullPolicy: IfNotPresent
+        command:
+        - php
+        - /runtime-config-loader/apply-runtime-config.php
+        volumeMounts:
+        - name: data
+          mountPath: /var/www/html
+        - name: runtime-config
+          mountPath: /config
+          readOnly: true
+        - name: runtime-config-loader
+          mountPath: /runtime-config-loader
+          readOnly: true
       containers:
       - name: espocrm
         image: espocrm/espocrm:9.3.8
@@ -197,6 +286,13 @@ spec:
       - name: data
         persistentVolumeClaim:
           claimName: espocrm-data
+      - name: runtime-config
+        configMap:
+          name: espocrm-runtime-config
+          optional: true
+      - name: runtime-config-loader
+        configMap:
+          name: espocrm-runtime-config-loader
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -217,6 +313,22 @@ spec:
         app: espocrm
         component: daemon
     spec:
+      initContainers:
+      - name: espocrm-runtime-config
+        image: espocrm/espocrm:9.3.8
+        imagePullPolicy: IfNotPresent
+        command:
+        - php
+        - /runtime-config-loader/apply-runtime-config.php
+        volumeMounts:
+        - name: data
+          mountPath: /var/www/html
+        - name: runtime-config
+          mountPath: /config
+          readOnly: true
+        - name: runtime-config-loader
+          mountPath: /runtime-config-loader
+          readOnly: true
       containers:
       - name: espocrm-daemon
         image: espocrm/espocrm:9.3.8
@@ -237,6 +349,13 @@ spec:
       - name: data
         persistentVolumeClaim:
           claimName: espocrm-data
+      - name: runtime-config
+        configMap:
+          name: espocrm-runtime-config
+          optional: true
+      - name: runtime-config-loader
+        configMap:
+          name: espocrm-runtime-config-loader
 ---
 apiVersion: v1
 kind: Service
