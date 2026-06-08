@@ -227,8 +227,8 @@
   changed_when: false
   failed_when: >
     espocrm_email_config_effective_allowlist.rc != 0 or
-    (espocrm_email_config_effective_allowlist.stdout | trim) !=
-    (espocrm_email_server_allowed_address_list | to_json)
+    (espocrm_email_config_effective_allowlist.stdout | trim | from_json) !=
+    espocrm_email_server_allowed_address_list
   when:
     - espocrm_email_config_should_apply | bool
     - espocrm_email_config_verify_effective | bool
