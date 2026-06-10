@@ -55,6 +55,15 @@ while IFS= read -r kustomization; do
   fi
 done < <(find kubernetes -name kustomization.yaml | sort)
 
+log "Leantime root and MCP route isolation check"
+leantime_render="${tmp_dir}/leantime-route-isolation.yaml"
+kubectl kustomize kubernetes/apps/leantime > "${leantime_render}"
+grep -q "name: leantime-root-ui-redirect" "${leantime_render}"
+grep -q "name: leantime-root-ingress" "${leantime_render}"
+grep -q "pathType: Exact" "${leantime_render}"
+grep -q "replacement: https://projects.thekeepstudios.com/dashboard/home" "${leantime_render}"
+grep -q "default-leantime-root-ui-redirect@kubernetescrd" "${leantime_render}"
+
 log "Ansible syntax check"
 inventory="ansible/inventory.production.ini"
 if [ ! -f "${inventory}" ]; then

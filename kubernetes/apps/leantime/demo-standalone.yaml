@@ -366,3 +366,38 @@ spec:
             name: leantime
             port:
               number: 80
+---
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: leantime-root-ui-redirect
+spec:
+  redirectRegex:
+    regex: '^(https?://[^/]+)/?$'
+    replacement: 'https://localhost/dashboard/home'
+    permanent: false
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: leantime-root-ingress
+  annotations:
+    traefik.ingress.kubernetes.io/router.middlewares: default-leantime-root-ui-redirect@kubernetescrd
+    traefik.ingress.kubernetes.io/router.priority: "100"
+    traefik.ingress.kubernetes.io/service.serversscheme: http
+spec:
+  tls:
+  - hosts:
+    - localhost
+    secretName: leantime-tls
+  rules:
+  - host: localhost
+    http:
+      paths:
+      - path: /
+        pathType: Exact
+        backend:
+          service:
+            name: leantime
+            port:
+              number: 80

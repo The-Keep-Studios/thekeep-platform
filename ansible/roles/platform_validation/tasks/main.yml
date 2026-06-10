@@ -7,6 +7,8 @@
       - Synced Healthy
     platform_validation_twenty_enabled: "{{ ((platform_optional_apps | default({})).twenty | default({})).enabled | default(false) | bool }}"
     platform_validation_espocrm_enabled: "{{ ((platform_optional_apps | default({})).espocrm | default({})).enabled | default(false) | bool }}"
+    platform_validation_leantime_mcp_enabled: "{{ (platform_leantime_mcp | default({})).enabled | default(false) | bool }}"
+    platform_validation_leantime_mcp_path: "{{ (platform_leantime_mcp | default({})).endpoint_path | default('/mcp') }}"
 
 - name: Check Kubernetes API connectivity
   ansible.builtin.command:
@@ -710,6 +712,53 @@
   environment: "{{ platform_kubectl_env }}"
   become: true
   become_user: k3s-admin
+
+- name: Verify Leantime root is isolated from MCP routing
+  ansible.builtin.uri:
+    url: https://projects.thekeepstudios.com/
+    headers:
+      Accept: "{{ item }}"
+    status_code: [301, 302, 303, 307, 308]
+    follow_redirects: none
+    return_content: true
+    timeout: 15
+  loop:
+    - text/html
+    - text/event-stream
+  register: leantime_root_routes
+  failed_when: >
+    leantime_root_routes.location | default('') !=
+    'https://projects.thekeepstudios.com/dashboard/home' or
+    (leantime_root_routes.content | default('') is search('"jsonrpc"'))
+  when: require_external_https | default(true) | bool
+
+- name: Verify Leantime canonical dashboard route serves HTML
+  ansible.builtin.uri:
+    url: https://projects.thekeepstudios.com/dashboard/home
+    headers:
+      Accept: text/html
+    status_code: 200
+    follow_redirects: all
+    return_content: true
+    timeout: 15
+  register: leantime_dashboard_route
+  failed_when: >
+    not (leantime_dashboard_route.content | default('') is search('<html')) or
+    (leantime_dashboard_route.content | default('') is search('"jsonrpc"'))
+  when: require_external_https | default(true) | bool
+
+- name: Verify Leantime MCP endpoint rejects unauthenticated streaming requests
+  ansible.builtin.uri:
+    url: "https://projects.thekeepstudios.com{{ platform_validation_leantime_mcp_path }}"
+    headers:
+      Accept: text/event-stream
+    status_code: [401, 403]
+    follow_redirects: none
+    return_content: true
+    timeout: 15
+  when:
+    - require_external_https | default(true) | bool
+    - platform_validation_leantime_mcp_enabled | bool
 
 - name: Verify HTTPS endpoints
   ansible.builtin.uri:

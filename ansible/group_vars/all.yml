@@ -55,6 +55,10 @@ platform_email:
   wisemapping:
     use_smtp: false
 
+platform_leantime_mcp:
+  enabled: false
+  endpoint_path: /mcp
+
 # Optional CRM apps. Baserow remains the core relationship-management app.
 platform_optional_apps:
   twenty:

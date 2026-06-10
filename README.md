@@ -527,6 +527,8 @@ This is the backlog for moving from production-like to high availability:
 - Cloudflare Tunnel edge deployment: `kubernetes/platform/cloudflared/*`
 - GitOps apps/root: `kubernetes/gitops/*`
 - Leantime backup CronJob: `kubernetes/apps/leantime/backup-cronjob.yaml`
+- Leantime UI/MCP route contract: `docs/leantime-mcp-routing.md`
+- Leantime UI/MCP route probe: `scripts/check-leantime-routing.sh`
 - Runtime env template: `scripts/production.env.example`
 - OIDC reconcile helper: `scripts/reconcile-oidc.sh`
 - Leantime on-demand backup: `scripts/backup-leantime-now.sh`

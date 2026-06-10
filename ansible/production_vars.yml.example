@@ -97,3 +97,10 @@ platform_secrets:
 #     smtp_port: "587"
 #     smtp_username: "postmaster@mg.thekeepstudios.com"
 #     smtp_password: "CHANGE_ME_MAILGUN_SMTP_PASSWORD"
+
+# Optional: set enabled after installing and enabling Leantime's MCP Server
+# plugin. Production validation then requires the dedicated endpoint to reject
+# unauthenticated requests instead of routing MCP traffic through the UI root.
+# platform_leantime_mcp:
+#   enabled: true
+#   endpoint_path: /mcp
