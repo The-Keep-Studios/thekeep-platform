@@ -192,6 +192,15 @@ In a fresh local database, Leantime may redirect the login path to `/install`.
 That is accepted by the smoke and observation probes because it still proves the
 local app is serving a real first-run page.
 
+The Leantime smoke test also requests `/` through the local Traefik service with
+`Accept: text/event-stream`. It must redirect to `/dashboard/home` rather than
+returning an MCP JSON-RPC response. Production and authenticated-session checks
+are documented in `docs/leantime-mcp-routing.md` and can be run with:
+
+```bash
+scripts/check-leantime-routing.sh
+```
+
 Baserow probes `http://baserow/` with:
 
 ```text

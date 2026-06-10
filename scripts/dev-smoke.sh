@@ -162,15 +162,30 @@ smoke_leantime() {
     --quiet=true \
     -- \
     sh -ceu '
+      curl -sS --max-time 20 \
+        -D /tmp/leantime-root.headers \
+        -o /tmp/leantime-root.body \
+        -H "Host: '"${probe_host}"'" \
+        -H "X-Forwarded-Proto: https" \
+        -H "Accept: text/event-stream" \
+        http://traefik.kube-system.svc.cluster.local/
+      grep -Eq "^HTTP/[0-9.]+ 30[1278]" /tmp/leantime-root.headers
+      grep -Eiq "^location: https://'"${probe_host}"'/dashboard/home\r?$" /tmp/leantime-root.headers
+      ! grep -Eiq "\"jsonrpc\"" /tmp/leantime-root.body
+
       curl -fsS --max-time 20 \
         -H "Host: '"${probe_host}"'" \
         -H "X-Forwarded-Proto: https" \
-        http://leantime/auth/login > /tmp/leantime-login.html
+        -H "Accept: text/html" \
+        -L \
+        http://leantime/dashboard/home > /tmp/leantime-login.html
       test -s /tmp/leantime-login.html
       grep -Eiq "leantime|login|email|password|install|redirecting" /tmp/leantime-login.html
       head -c 500 /tmp/leantime-login.html
+      printf "\nLEANTIME_ROUTE_SMOKE_OK\n"
     ' 2>&1)"
   echo "${probe_output}"
+  grep -q "^LEANTIME_ROUTE_SMOKE_OK$" <<< "${probe_output}"
   grep -Eiq "leantime|login|email|password|install|redirecting" <<< "${probe_output}"
 
   echo "Leantime smoke test passed"
