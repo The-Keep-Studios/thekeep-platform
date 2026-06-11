@@ -10,3 +10,4 @@ ansible/production_vars.yml
 /ansible/dev_vars.yml
 /.artifacts/
 /.ai/
+/.junie/
