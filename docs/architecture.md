@@ -1,78 +1,44 @@
 # Platform Architecture
 
-This document describes the architecture that exists in this repository today,
-the operating model around it, and the direction that is planned but not yet
-implemented.
+This is the detailed companion to the README overview. It describes what exists
+today and avoids presenting planned work as implemented.
 
-Status labels used below:
-
-- **Current:** represented in committed configuration and used by the platform.
-- **Partial:** implemented for some services or dependent on manual operator
-  configuration.
-- **Planned:** an intended direction, not a capability that should be assumed.
-
-## System Context
+## Current Shape
 
 ```mermaid
 flowchart LR
-    Operator[Operator workstation]
-    GitHub[GitHub repository]
-    Ansible[Ansible]
-    Argo[Argo CD]
-    K3s[k3s cluster]
-    Tunnel[Cloudflare Tunnel]
-    Users[Browsers and API clients]
-    Identity[Authentik]
-    Apps[Platform applications]
-    Observability[Prometheus, Grafana, Loki]
-    Storage[Local persistent volumes]
-
-    Operator -->|push reviewed desired state| GitHub
-    Operator -->|bootstrap and validation| Ansible
-    Ansible -->|provision host and seed cluster| K3s
-    Ansible -->|bootstrap| Argo
-    GitHub -->|pull desired state| Argo
-    Argo -->|reconcile| K3s
-    Users -->|public HTTPS| Tunnel
-    Tunnel -->|HTTPS to Traefik| K3s
-    K3s --> Identity
-    K3s --> Apps
-    K3s --> Observability
-    Apps --> Storage
-    Observability --> Storage
+    Operator -->|Ansible bootstrap| K3s
+    Operator -->|push desired state| GitHub
+    GitHub --> ArgoCD
+    ArgoCD --> K3s
+    Users --> Cloudflare
+    Cloudflare --> Traefik
+    Traefik --> Apps
+    Apps --> PVCs
+    K3s --> Monitoring
 ```
 
-The current production-like deployment is a single k3s control-plane host. The
-diagram includes the intended local/VPS portability boundary, but it does not
-mean that a multi-cluster or highly available topology exists today.
+The current production-like environment is one k3s control-plane host with
+local persistent volumes. It is recoverable, but it is not highly available.
 
-## Control Plane
+## Responsibilities
 
-### Ansible Bootstrap
+| Layer | Responsibility |
+| --- | --- |
+| Ansible | Provision the host, install k3s, seed Secrets, bootstrap Argo CD, run validation |
+| Git | Long-term desired state and review boundary |
+| Argo CD | Reconcile committed Kubernetes manifests and Helm values |
+| k3s | Run workloads, networking, storage claims, and service discovery |
+| Cloudflare Tunnel | Provide the outbound public edge path |
+| Traefik | Route host/path traffic to Kubernetes Services |
+| Authentik | Central identity; native OIDC where practical, forward-auth otherwise |
+| Prometheus/Grafana/Loki | Metrics, alerts, dashboards, and logs |
 
-**Current**
+Manual cluster changes are diagnostic only unless reconciled back into Git.
 
-`ansible/setup_k3s_production.yml` is the production entrypoint. It:
+## GitOps Graph
 
-1. validates local production configuration and required secrets;
-2. provisions the k3s host and the `k3s-admin` operating account;
-3. renders and verifies the GitOps application definitions;
-4. seeds the Kubernetes Secrets required by enabled services;
-5. installs or reconciles Argo CD;
-6. runs platform validation gates.
-
-Ansible owns machine and cluster bootstrap. It is not the preferred day-two
-application deployment mechanism.
-
-### GitOps Reconciliation
-
-**Current**
-
-Argo CD is the day-two reconciliation engine. The root application at
-`kubernetes/gitops/root/platform-root.application.yaml` discovers child
-applications from `kubernetes/gitops/apps/`.
-
-The application graph is:
+`platform-root` discovers the child applications in `kubernetes/gitops/apps/`:
 
 ```text
 platform-root
@@ -83,230 +49,73 @@ platform-root
 ├── platform-baserow
 ├── platform-monitoring-prometheus
 ├── platform-monitoring-loki
-├── platform-crm-twenty       optional
-└── platform-crm-espocrm      optional
+├── platform-crm-twenty   optional
+└── platform-crm-espocrm  optional
 ```
 
-Most applications use automated self-healing. Pruning is deliberately disabled
-for most stateful application paths so resource removal remains an explicit
-operational decision. Loki is currently an exception and has automated pruning
-enabled.
+Most apps self-heal but do not prune automatically. This is deliberate for
+stateful services: deletion remains an explicit operational action.
 
-Git is the desired-state boundary. Manual cluster changes are temporary
-diagnostic actions unless they are reconciled back into manifests, values, or
-Ansible.
+## Runtime Boundaries
 
-## Runtime Topology
+| Namespace | Workload |
+| --- | --- |
+| `argocd` | GitOps |
+| `identity` | Authentik |
+| `default` | Leantime |
+| `wisemapping` | WiseMapping |
+| `baserow` | Baserow |
+| `espocrm`, `twenty` | Optional CRM apps |
+| `monitoring` | Prometheus, Grafana, Loki, Promtail |
+| `kube-system` | Cloudflare Tunnel and cluster services |
 
-### Cluster Shape
-
-**Current**
-
-- One k3s server/control-plane failure domain.
-- Traefik is the in-cluster ingress controller.
-- Application workloads use Kubernetes namespaces and Services for isolation
-  and discovery.
-- Persistent applications use local `ReadWriteOnce` persistent volumes.
-
-**Planned**
-
-- Three-server k3s control plane with etcd quorum.
-- Separate worker nodes where scheduling or resource isolation justifies them.
-- Replicated storage and explicit placement policies.
-- Provider-portable local and VPS clusters managed through the same contracts.
-
-The current deployment is recoverable and production-like, but it is not highly
-available. Loss of the control-plane host or its local storage can interrupt the
-entire platform.
-
-### Application Boundaries
-
-| Area | Namespace | Purpose | Status |
-| --- | --- | --- | --- |
-| Argo CD | `argocd` | GitOps reconciliation and application health | Current |
-| Identity | `identity` | Authentik and forward-auth components | Current/Partial |
-| Leantime | `default` | Project and workload management | Current |
-| WiseMapping | `wisemapping` | Mind mapping | Current |
-| Baserow | `baserow` | Relationship and structured operating data | Current |
-| EspoCRM | `espocrm` | Optional active opportunity CRM | Optional |
-| Twenty | `twenty` | Optional CRM evaluation/deployment | Optional |
-| Monitoring | `monitoring` | Metrics, dashboards, alerts, and logs | Current |
-| Cloudflare Tunnel | `kube-system` | Outbound edge connector | Current |
-
-Optional applications are controlled by production variables and included in
-the rendered Argo CD application set only when enabled.
-
-## Network And Access Path
-
-### Public HTTPS
-
-**Current**
-
-The supported public path is:
+The public request path is:
 
 ```text
-client -> Cloudflare edge -> Cloudflare Tunnel -> Traefik -> application Service
+client -> Cloudflare -> Tunnel -> Traefik -> Service -> Pod
 ```
 
-The tunnel avoids opening a public inbound port on the LAN origin. Cloudflare
-forwards to Traefik over HTTPS. The internal Traefik certificate is self-signed,
-so the configured Cloudflare origin uses `No TLS Verify`.
+Authentik is the intended shared identity boundary, but applications still own
+their record-level authorization.
 
-Ingress hostnames and routing remain part of the GitOps desired state. A
-Cloudflare hostname alone is not sufficient; the matching Kubernetes Ingress
-must also exist.
+## Data And Recovery
 
-### Authentication
+- Stateful apps use local `ReadWriteOnce` volumes.
+- Backup CronJobs exist for Leantime and enabled CRM/data apps.
+- Backups are generally cluster-local; off-cluster replication is not yet a
+  platform guarantee.
+- A successful backup is not proof of restore. Restore drills and explicit
+  RPO/RTO targets remain planned work.
+- Runtime data and credentials do not belong in Git.
 
-**Partial**
+## Deployment Flow
 
-Authentik is the intended platform identity hub:
+1. Create one focused branch.
+2. Run static checks and a disposable k3d smoke test when practical.
+3. Merge after review.
+4. Let Argo CD reconcile the merged revision.
+5. Run production validation with the correct host and privileges.
+6. Verify the affected user workflow, not only pod health.
 
-- native OIDC is preferred when an application supports it cleanly;
-- Authentik forward-auth is available for applications that need an external
-  authentication gate;
-- middleware attachment remains deliberate and is not globally enabled;
-- some providers, applications, and client credentials still require manual
-  Authentik configuration.
+Production deployment and final risk acceptance remain human-controlled.
 
-Application-level authorization still matters behind a shared identity layer.
-Forward-auth proves identity at the edge but does not replace record-level or
-tool-level permissions inside an application.
+## Environment Boundaries
 
-## Data And Storage
+- **Internal:** confidential operating data; authenticated access required.
+- **Local development:** disposable k3d and deterministic synthetic secrets.
+- **Public demo (planned):** separate deployment and synthetic data only.
 
-### Persistent State
+Demo mode must never be a flag that exposes the internal database.
 
-**Current**
-
-Stateful applications use Kubernetes persistent volume claims. The current
-single-node storage model prioritizes straightforward recovery over
-high-availability failover.
-
-Application manifests, configuration, and operational scripts belong in Git.
-Database contents, uploaded files, credentials, and other runtime state do not.
-
-### Backup And Restore
-
-**Partial**
-
-Backup CronJobs exist for Leantime, Baserow, EspoCRM, and Twenty where those
-applications are enabled. Leantime also has on-demand backup and restore helper
-scripts.
-
-Current limitations:
-
-- backups generally remain on cluster-local persistent volumes;
-- off-cluster replication is not yet a platform-managed guarantee;
-- routine restore drills and explicit recovery objectives are not yet
-  automated for every service;
-- a successful backup Job is not proof of a successful restore.
-
-**Planned**
-
-- encrypted off-cluster replication;
-- defined RPO and RTO per stateful service;
-- scheduled restore verification;
-- etcd backup and recovery procedures appropriate for a multi-server cluster.
-
-## Observability
-
-**Current**
-
-- Prometheus and kube-prometheus-stack provide metrics and alert rules.
-- Grafana provides dashboards and exploration.
-- Loki stores application and platform logs.
-- Promtail ships pod logs to Loki.
-- Production validation checks selected application endpoints, workloads,
-  backups, GitOps status, and observability APIs.
-
-Promtail is deprecated upstream and migration to Grafana Alloy is planned.
-Monitoring availability does not replace user-workflow validation; production
-changes should verify both workload health and the affected UI or API path.
-
-## Internal, Demo, And Public Boundaries
-
-### Internal Deployment
-
-**Current**
-
-The deployed platform is treated as a confidential, directly controlled
-operating environment. It may contain private project, CRM, relationship, and
-job-search information. Access controls and backups must preserve that
-assumption.
-
-### Local Development
-
-**Current**
-
-Disposable k3d workflows render and exercise applications without targeting the
-production cluster. Deterministic development secrets and local-only patches
-support repeatable smoke testing. See `docs/local-iac-testing.md`.
-
-### Public Demo
-
-**Planned**
-
-A safe public demo must use synthetic organizations, people, opportunities,
-meetings, and project data. Production exports, CRM records, contact data, and
-private operational history must never be used as demo fixtures.
-
-Demo mode should be a separate data and access boundary, not a flag that makes a
-confidential production database public.
-
-## Security Boundaries
-
-**Current**
-
-- production variables and credentials are local and ignored by Git;
-- Kubernetes Secrets are seeded by Ansible;
-- public services are exposed through Cloudflare Tunnel and Traefik;
-- Authentik provides the intended central identity boundary;
-- the repository includes validation for selected ingress, authentication,
-  backup, and observability behavior.
-
-**Planned**
-
-- SOPS or External Secrets for encrypted/delegated secret management;
-- stricter RBAC and short-lived elevated access;
-- admission controls for dangerous changes;
-- mandatory review and status checks for infrastructure paths;
-- complete audit and approval controls before AI tools receive write access.
-
-The security model must assume that AI-generated text, imported content, issue
-comments, and third-party documentation can contain hostile instructions.
-Automation may not treat retrieved text as authority to use tools or cross data
-boundaries.
-
-## Deployment Lifecycle
-
-The expected change path is:
-
-1. create one focused branch;
-2. update manifests, values, Ansible, tests, and documentation together;
-3. run static rendering and syntax checks;
-4. run a disposable local smoke test when practical;
-5. review and merge through GitHub;
-6. allow Argo CD to reconcile the merged revision;
-7. run production validation with the correct host, kubeconfig, and privileges;
-8. verify the user-visible workflow;
-9. document any incident finding or lasting operational constraint.
-
-Production deployment and final risk acceptance remain human-controlled
-operations.
-
-## Known Architectural Gaps
+## Known Gaps
 
 - Single control-plane and storage failure domain.
-- Backups are not uniformly replicated or restore-tested off cluster.
-- Secret management is not yet encrypted in Git or delegated to an external
-  secret store.
-- Authentik provider/application creation is not fully automated.
-- AI service, meeting intelligence, and knowledge-memory layers are design work,
-  not current platform capabilities.
-- Public demo isolation and synthetic seed/reset workflows are not implemented.
-- Optional CRM applications increase operational scope and require deliberate
-  enablement, backups, and access controls.
+- No uniform off-cluster backup and restore verification.
+- Secrets are not yet managed through SOPS or External Secrets.
+- Authentik provider/application setup is not fully automated.
+- Promtail should migrate to Grafana Alloy.
+- AI services, meeting memory, and public demo mode are design work, not current
+  capabilities.
 
-These gaps are constraints to design around, not capabilities to imply in
-product or operational claims.
+The deeper operational commands remain in the README and focused runbooks; this
+document records architecture, not another operations manual.
