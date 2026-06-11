@@ -68,6 +68,9 @@ Future target:
 
 HA means high availability: the system can survive the loss of one machine, process, or zone without taking the platform down.
 
+For the detailed control-plane, runtime, network, storage, identity, and
+deployment model, see [`docs/architecture.md`](docs/architecture.md).
+
 ## What To Do First
 
 For a new production-like deployment:
