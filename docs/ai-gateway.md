@@ -1,312 +1,91 @@
-# Internal AI Gateway Architecture
+# Internal AI Gateway
 
-This document proposes the first secure internal AI-services layer for The Keep
-Platform. It is an architecture and implementation contract, not a deployed
-service.
-
-The gateway is not a general-purpose public chatbot and not a transparent proxy
-to model providers. It is a policy enforcement point for authenticated,
-auditable, permission-aware AI workflows.
+The gateway is an internal policy enforcement point, not a public chatbot or
+transparent model proxy. Models generate proposals; deterministic services
+authorize retrieval and actions.
 
 ## Goals
 
-- support local and explicitly configured hosted model providers;
-- keep application code independent from provider-specific APIs;
-- authenticate human and service callers;
-- authorize data retrieval and tool actions outside the model;
-- version prompts, schemas, policies, and provider configuration;
-- record redacted audit evidence for requests and tool actions;
-- require human approval for destructive or externally visible actions;
-- support read-only assistants, meeting summarization, extraction, issue
-  drafting, and internal operations workflows;
-- remain useful when a provider is unavailable or disabled.
+- local and explicitly configured hosted providers;
+- provider-independent application API;
+- authenticated, permission-aware retrieval;
+- versioned prompts/workflows and validated output;
+- narrow tools with human approval for risky actions;
+- redacted audit evidence;
+- read-only knowledge, meeting summaries, extraction, and drafting.
 
-## Non-Goals
+Non-goals: generic shell/browser/HTTP/SQL/CRUD, autonomous external
+communication, production mutation, or becoming a canonical data store.
 
-- exposing raw provider credentials to applications or agents;
-- unrestricted shell, browser, database, or generic CRUD access;
-- autonomous external communication or production changes;
-- storing all organizational data in the gateway;
-- making model output authoritative;
-- choosing one permanent model or vector database in the first implementation;
-- serving confidential workloads from a public demo deployment.
-
-## Architectural Principles
-
-1. Models generate proposals; deterministic services make policy decisions.
-2. Retrieval permission is enforced before content enters model context.
-3. Tool permission is enforced for every call, not only in the system prompt.
-4. Approval is bound to an exact proposal digest and expires.
-5. Provider adapters receive the minimum context required for the task.
-6. All structured output is schema-validated before use.
-7. Read, propose, approve, and execute are separate operations.
-8. Local and hosted providers use the same policy and audit path.
-9. Confidential and public indexes are separate security domains.
-10. Failure reduces capability; it never broadens permissions.
-
-## Component Model
+## Components
 
 ```mermaid
 flowchart LR
-    Client[Internal client]
-    Gateway[AI Gateway API]
-    Identity[Identity adapter]
-    Policy[Policy engine]
-    Prompt[Prompt registry]
-    Retrieval[Retrieval broker]
-    Model[Provider adapter]
-    Tools[Tool broker]
-    Approval[Approval service]
-    Audit[Audit sink]
-    Local[LocalAI or local provider]
-    Hosted[Explicit hosted provider]
-    Sources[Authorized source connectors]
-    Targets[Authorized target connectors]
-
     Client --> Gateway
     Gateway --> Identity
     Gateway --> Policy
-    Gateway --> Prompt
+    Gateway --> Prompts
     Gateway --> Retrieval
     Retrieval --> Sources
-    Gateway --> Model
-    Model --> Local
-    Model --> Hosted
+    Gateway --> Provider
+    Provider --> LocalAI
+    Provider --> Hosted[Approved hosted provider]
     Gateway --> Tools
-    Tools --> Policy
     Tools --> Approval
     Tools --> Targets
     Gateway --> Audit
-    Retrieval --> Audit
-    Tools --> Audit
-    Approval --> Audit
 ```
 
-### Gateway API
+| Component | Responsibility |
+| --- | --- |
+| Gateway API | Run a named workflow; return answer, draft, or proposals |
+| Identity | Validate Authentik/OIDC or service identity |
+| Policy | Authorize workflow, source, provider, tool, target, and limits |
+| Prompt registry | Versioned prompt, schemas, allowed sources/tools/providers |
+| Retrieval broker | Apply permissions before content enters context |
+| Provider adapter | Normalize local/hosted generation and embeddings |
+| Tool broker | Validate and authorize narrow domain actions |
+| Approval | Bind human approval to exact proposal digest and expiry |
+| Audit | Redacted request, decision, proposal, approval, and result events |
 
-The API:
-
-- accepts authenticated workflow requests;
-- resolves the caller and delegated service identity;
-- loads a versioned workflow definition;
-- obtains authorized context through the retrieval broker;
-- invokes the selected provider adapter;
-- validates structured output;
-- returns a response, draft, or proposed tool actions;
-- never executes model-requested actions directly.
-
-### Identity Adapter
-
-The identity adapter validates Authentik/OIDC identity for human callers and a
-separate credential for service callers. It emits a normalized principal:
-
-```json
-{
-  "actorType": "human",
-  "actorId": "stable-subject-id",
-  "groups": ["internal-member"],
-  "delegatedService": "meeting-summary",
-  "sessionId": "request-session-id"
-}
-```
-
-The gateway must not accept user-supplied roles or group claims without
-cryptographic validation.
-
-### Policy Engine
-
-The policy engine evaluates:
-
-- principal and delegated service;
-- workflow and prompt version;
-- deployment class;
-- provider;
-- source connector and requested fields;
-- data classification;
-- tool, target, and action risk;
-- approval state;
-- query, token, cost, and time limits.
-
-Initial policy may be explicit application code and reviewed configuration. A
-general policy language should be adopted only when the number and complexity
-of policies justify another runtime dependency.
-
-### Prompt Registry
-
-Prompts are named, versioned artifacts with:
-
-- purpose and owner;
-- input schema;
-- output schema;
-- allowed providers and models;
-- allowed retrieval sources;
-- allowed tools and action levels;
-- maximum context and output;
-- retention classification;
-- test fixtures and expected invariants;
-- change history.
-
-Applications request a prompt by stable name and version. They do not submit an
-arbitrary system prompt for a privileged workflow.
-
-### Retrieval Broker
-
-The broker:
-
-- authorizes source, record, and field access before retrieval;
-- applies repository, project, account, or user scope;
-- limits result count and content size;
-- preserves source IDs, URLs, timestamps, and classification;
-- redacts unnecessary identifiers and secrets;
-- separates public, internal, confidential, and restricted indexes;
-- returns citations/provenance with every result.
-
-The model cannot expand retrieval scope through natural-language instructions.
-
-### Provider Adapter
-
-Provider adapters normalize local and hosted inference. Provider choice is a
-policy decision, not a client-controlled URL.
-
-The minimum interface is:
+## Provider Contract
 
 ```text
 generate(request) -> response
-stream(request) -> event stream
-embed(request) -> vectors
-health() -> provider status and capabilities
+stream(request)   -> event stream
+embed(request)    -> vectors
+health()          -> capabilities/status
 ```
 
-Logical request:
+The logical request includes workflow/prompt version, messages, output schema,
+allowed tool definitions, token/time limits, and request ID. The response
+includes provider/model, validated output, usage, finish reason, and tool
+proposals.
 
-```json
-{
-  "requestId": "uuid",
-  "modelClass": "summarization",
-  "messages": [],
-  "tools": [],
-  "outputSchema": {},
-  "limits": {
-    "maxInputTokens": 16000,
-    "maxOutputTokens": 2000,
-    "timeoutMs": 60000
-  },
-  "metadata": {
-    "workflow": "meeting-summary",
-    "promptVersion": "1"
-  }
-}
-```
+Adapters:
 
-Logical response:
+- use configured endpoints/credentials only;
+- normalize errors, timeout, retry, streaming, and usage;
+- declare retention/data-use posture;
+- never log credentials or unrestricted prompts;
+- never route confidential content to a hosted fallback without policy.
 
-```json
-{
-  "provider": "localai",
-  "model": "configured-model-id",
-  "finishReason": "stop",
-  "output": {},
-  "usage": {
-    "inputTokens": 0,
-    "outputTokens": 0
-  },
-  "toolProposals": []
-}
-```
+Initial direction: evaluate the existing LocalAI deployment first. Hosted
+providers stay disabled until explicitly configured by classification.
 
-Adapters must:
+## Workflow Contract
 
-- use configured endpoints and credentials only;
-- normalize timeouts, retries, streaming, and error codes;
-- expose capability metadata;
-- redact provider errors before returning them to clients;
-- never log raw credentials or unrestricted prompts;
-- declare provider retention and data-use posture.
-
-Initial provider direction:
-
-- use the existing LocalAI deployment for local evaluation where its model
-  capabilities are sufficient;
-- keep hosted providers disabled until explicitly configured;
-- require per-provider classification rules so confidential prompts cannot
-  silently fall back to an external provider.
-
-### Tool Broker
-
-The tool broker exposes narrow domain actions such as:
-
-```text
-github.issue.draft
-espocrm.lead.search
-espocrm.lead.propose_create
-leantime.task.propose_update
-knowledge.record.search
-```
-
-It does not expose generic HTTP, shell, SQL, browser, or arbitrary entity CRUD
-to model-selected arguments.
-
-For every tool proposal it:
-
-1. validates the tool and argument schema;
-2. re-authorizes the action independently of the model;
-3. checks target and field allowlists;
-4. calculates action risk;
-5. generates a normalized dry-run;
-6. requires approval when policy says so;
-7. executes idempotently through a connector;
-8. emits an audit event.
-
-### Approval Service
-
-The approval service stores:
-
-- proposal digest;
-- exact target and changes;
-- requesting actor and workflow;
-- approving human;
-- issue and expiration time;
-- one-time or bounded-use state;
-- execution result.
-
-The executor rejects approvals whose proposal, actor, target, or policy version
-has changed.
-
-### Audit Sink
-
-The audit sink records:
-
-- actor and service identity;
-- workflow, prompt, policy, provider, and model versions;
-- source references and classifications;
-- tool proposal and action category;
-- approval state;
-- redacted input/output summaries;
-- token, latency, cost, denial, and error metrics;
-- final target record IDs.
-
-Audit payloads must not become a secondary copy of confidential source data.
-The baseline event shape should align with #20.
-
-## Workflow Definition
-
-Each enabled workflow is declarative and reviewable:
+Each workflow declares:
 
 ```yaml
 id: meeting-summary
 version: "1"
-prompt: meeting-summary
-outputSchema: meeting-summary-v1
-providers:
-  - localai
-retrieval:
-  sources:
-    - meeting-records
-  classifications:
-    - internal
-    - confidential
-tools:
-  - knowledge.record.propose_create
+prompt: meeting-summary-v1
+outputSchema: meeting-record-v1
+providers: [localai]
+sources: [meeting-records]
+classifications: [internal, confidential]
+tools: [knowledge.record.propose_create]
 approval:
   knowledge.record.propose_create: required
 limits:
@@ -316,39 +95,50 @@ limits:
   timeoutSeconds: 60
 retention:
   rawPrompt: none
-  outputDays: 30
 ```
 
-This is a logical contract. The first implementation may use YAML or code-backed
-configuration, but it must validate the same fields.
+Applications request a reviewed workflow; they do not supply arbitrary system
+prompts or provider URLs for privileged operations.
 
-## API Shape
+## Retrieval
 
-Initial endpoints:
+Before model invocation:
+
+- authorize principal, workspace, source, record, and field;
+- cap result count/content size;
+- preserve source ID, URL, version, timestamp, and classification;
+- redact unnecessary identifiers/secrets;
+- separate public and confidential indexes.
+
+Natural-language content cannot expand retrieval scope.
+
+## Tools And Approval
+
+Expose domain actions such as:
 
 ```text
-POST /v1/workflows/{workflow}:run
-POST /v1/workflows/{workflow}:stream
-POST /v1/tool-proposals/{proposalId}:approve
-POST /v1/tool-proposals/{proposalId}:reject
-POST /v1/tool-proposals/{proposalId}:execute
-GET  /v1/requests/{requestId}
-GET  /health/live
-GET  /health/ready
+github.issue.draft
+espocrm.lead.search
+espocrm.lead.propose_create
+leantime.task.propose_update
+knowledge.record.search
 ```
 
-Rules:
+For each proposal:
 
-- `run` and `stream` may return tool proposals but do not execute them;
-- approval requires a human identity with the required role;
-- execution checks approval again and may use a separate executor identity;
-- request status returns redacted metadata, not raw confidential context;
-- readiness fails when required policy, prompt, provider, or audit dependencies
-  are unavailable.
+1. validate strict arguments;
+2. re-authorize independently from the model;
+3. enforce target/field/batch limits;
+4. generate an exact dry run;
+5. bind approval to digest, actor, target, policy version, and expiry;
+6. execute idempotently through a constrained connector;
+7. audit the result.
 
-## Permission Model
+The model and service identity cannot approve their own proposal.
 
-Permissions are explicit capabilities:
+## Permissions
+
+Use explicit capabilities:
 
 ```text
 workflow:meeting-summary:run
@@ -359,168 +149,71 @@ tool:knowledge.record.propose_create:approve
 tool:knowledge.record.propose_create:execute
 ```
 
-No principal receives wildcard tool or source permissions by default.
+No wildcard source/tool permissions by default.
 
-Separation of duties:
+## API Direction
 
-- a model may propose;
-- a requesting service may submit the proposal;
-- an authorized human approves;
-- a constrained executor applies it;
-- the audit service records all stages.
+```text
+POST /v1/workflows/{workflow}:run
+POST /v1/workflows/{workflow}:stream
+POST /v1/tool-proposals/{id}:approve
+POST /v1/tool-proposals/{id}:reject
+POST /v1/tool-proposals/{id}:execute
+GET  /v1/requests/{id}
+GET  /health/live
+GET  /health/ready
+```
 
-For low-risk internal writes, a maintainer may later approve a bounded workflow
-policy that removes per-action approval. That exception must define exact
-targets, fields, volume, rollback, and expiry.
+Run/stream may propose actions but never execute them. Execution rechecks policy
+and approval.
 
-## Threat Model
+## Threat Controls
 
-| Threat | Control |
+| Risk | Control |
 | --- | --- |
-| Direct or indirect prompt injection | Retrieved content is untrusted; policy and tool checks occur outside the model |
-| Data leakage to a provider | Classification-aware provider policy, minimization, hosted providers disabled by default |
-| Overbroad retrieval | Source/record/field authorization before context assembly |
-| Excessive agency | Narrow tools, no generic CRUD, approval, idempotency, execution separation |
-| Insecure model output | Schema validation, escaping, enum and field allowlists |
-| Credential exposure | Provider credentials remain server-side and out of logs/prompts |
-| Cross-user data exposure | Principal-aware retrieval and cache partitioning |
-| Replay or proposal substitution | Expiring proposal digest and one-time approval |
-| Cost or denial-of-service | Request, token, concurrency, retry, and budget limits |
-| Provider compromise or drift | Pinned configuration, health checks, kill switch, explicit provider routing |
-| Audit data leakage | Redacted summaries, restricted audit access, retention limits |
-| Supply-chain compromise | Reviewed pinned dependencies and isolated evaluation |
+| Prompt injection | Retrieved text is untrusted; policy/tool checks outside model |
+| Data leakage | Classification-aware retrieval/provider routing |
+| Excessive agency | Narrow tools, approval, idempotency, no generic CRUD |
+| Unsafe output | Strict schema and downstream validation |
+| Cross-user leakage | Principal-aware query and cache partitioning |
+| Replay/substitution | Expiring one-time proposal digest |
+| Cost/DoS | Token, request, concurrency, retry, timeout, and budget limits |
+| Supply chain | Pinned reviewed dependencies/images/models; kill switch |
 
-## Storage And Retention
+See `docs/security.md` when merged and the external OWASP/NIST references there.
 
-The gateway should store only:
+## Deployment Direction
 
-- workflow and prompt definitions;
-- policy configuration;
-- request metadata;
-- tool proposals and approvals;
-- redacted audit events;
-- optional short-lived validated outputs when required by the workflow.
+- dedicated namespace;
+- separate API and executor identities/deployments;
+- ClusterIP only; no public Ingress by default;
+- Authentik/OIDC for human calls;
+- allowlisted connector networking;
+- resource/concurrency limits and readiness checks;
+- structured redacted logs;
+- hosted providers disabled without both Secret and policy.
 
-It should not become the canonical store for:
-
-- transcripts;
-- CRM records;
-- project tasks;
-- email bodies;
-- knowledge documents.
-
-Raw prompts and provider responses default to no persistent retention. Workflows
-that require retention must declare purpose, classification, duration, deletion
-behavior, and access policy.
-
-## Kubernetes Deployment Direction
-
-The initial internal deployment should use:
-
-- a dedicated namespace;
-- one API deployment and one constrained executor deployment;
-- separate service accounts and credentials;
-- ClusterIP-only Services;
-- no public Ingress by default;
-- Authentik/OIDC validation for human requests;
-- NetworkPolicies before access to confidential connectors;
-- CPU, memory, concurrency, and timeout limits;
-- readiness checks for policy, audit, and required provider dependencies;
-- structured logs with payload redaction;
-- disabled hosted providers unless their Secret and policy are present.
-
-The executor should not share the API pod's broad network or credentials.
-
-## Initial Use Cases
-
-### Read-Only Knowledge Assistant
-
-- public GitHub and selected internal Markdown sources;
-- cited answers;
-- no tools with write capability;
-- source permission applied before retrieval.
-
-### Meeting Summary
-
-- one approved transcript record;
-- structured summary, decisions, actions, and open questions;
-- no automatic task or CRM creation;
-- optional proposed knowledge record requiring approval.
-
-### GitHub Issue Drafting
-
-- public or explicitly approved internal context;
-- returns title/body/acceptance-criteria draft;
-- cannot publish or close an issue.
-
-### Internal Operations Assistant
-
-- starts read-only;
-- returns diagnostic commands and evidence;
-- cannot run production commands or synchronize Argo CD.
+The gateway stores workflow/policy metadata, proposals, approvals, and redacted
+audit events. Canonical transcripts, CRM records, tasks, emails, and knowledge
+documents stay in their owning systems.
 
 ## Implementation Slices
 
-### Slice 1: Read-Only Gateway
-
-- authenticated API;
-- LocalAI adapter;
-- versioned prompt registry;
-- public GitHub/Markdown retrieval;
-- schema validation;
-- redacted request audit;
-- no write tools.
-
-### Slice 2: Proposal Framework
-
-- narrow tool registry;
-- dry-run proposals;
-- proposal digest and approval state;
-- no external or destructive tools.
-
-### Slice 3: One Internal Connector
-
-- EspoCRM read/search and Lead create/update proposal;
-- field allowlist and duplicate checks;
-- approved execution only;
-- per-write audit event.
-
-### Slice 4: Hardening
-
-- negative permission tests;
-- indirect prompt-injection fixtures;
-- network isolation;
-- retention enforcement;
-- provider failover rules that preserve classification;
-- operational dashboards and alerts.
-
-Slice 4 is tracked by #23 and must review the actual implementation rather than
-only this proposal.
-
-## Follow-Up Issues To Create After Review
-
-- Implement gateway skeleton, identity normalization, and health endpoints.
-- Implement LocalAI provider adapter and capability discovery.
-- Add versioned workflow/prompt registry and schema validation.
-- Implement public GitHub/Markdown retrieval with source citations.
-- Implement structured redacted audit sink.
-- Implement proposal digest, human approval, and constrained executor.
-- Add EspoCRM read/search and dry-run Lead tools after #29.
-- Add security verification and prompt-injection test suite under #23.
-- Add monitoring for latency, denials, provider failures, and usage budgets.
-
-These should be separate implementation issues so provider, connector, and
-security work can be reviewed independently.
+1. **Read-only:** authenticated API, LocalAI adapter, prompt registry, public
+   GitHub/Markdown retrieval, schema validation, audit.
+2. **Proposals:** narrow tool registry, dry runs, digest/approval state.
+3. **One connector:** EspoCRM read/search and approved Lead changes after #29.
+4. **Hardening:** negative permissions, injection tests, isolation, retention,
+   monitoring, and kill switches under #23.
 
 ## Open Decisions
 
-- implementation language and framework;
-- initial LocalAI model and embedding model;
-- audit-event persistence backend and retention;
-- policy representation: application code, configuration, or dedicated engine;
-- whether approvals live in the gateway or a shared platform service;
-- first internal retrieval store and vector/search backend;
-- hosted providers permitted for each data classification.
+- implementation language/framework;
+- initial local model and embedding model;
+- audit persistence and retention;
+- code/config versus dedicated policy engine;
+- gateway-local versus shared approval service;
+- first retrieval/search backend;
+- allowed hosted providers by classification.
 
-No production implementation should silently choose these on behalf of the
-maintainer.
+Create focused implementation issues after these choices are reviewed.
