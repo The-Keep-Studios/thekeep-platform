@@ -68,6 +68,9 @@ Future target:
 
 HA means high availability: the system can survive the loss of one machine, process, or zone without taking the platform down.
 
+The synthetic demo scenario and reset contract are in
+[`demo/README.md`](demo/README.md).
+
 ## What To Do First
 
 For local review without creating a cluster:

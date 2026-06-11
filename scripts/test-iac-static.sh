@@ -41,6 +41,9 @@ done < <(find scripts -maxdepth 1 -type f -name "*.sh" | sort)
 log "Local prerequisite checker tests"
 scripts/test-local-prereqs.sh
 
+log "Synthetic demo data checks"
+scripts/test-demo-data.sh
+
 log "Kustomize render check"
 while IFS= read -r kustomization; do
   dir="$(dirname "${kustomization}")"
