@@ -1,404 +1,162 @@
-# Knowledge Memory Design
-
-This document defines a permission-aware, exportable organizational memory
-layer for The Keep Platform.
-
-The memory layer is an index and retrieval system over canonical source
-records. It is not a new system of record and not a vector-only data store.
-
-## Goals
-
-- make approved organizational knowledge searchable across systems;
-- preserve source attribution and update history;
-- enforce source permissions at indexing and query time;
-- keep public, internal, confidential, and restricted data separated;
-- export records as readable Markdown and JSON;
-- combine lexical and semantic retrieval;
-- support deterministic reindexing and deletion;
-- return citations with every answer or result.
-
-## Non-Goals
-
-- copying every record from every system;
-- replacing GitHub, Leantime, EspoCRM, Baserow, Gmail, or meeting storage;
-- unrestricted mailbox or CRM ingestion;
-- using embeddings as the canonical representation;
-- granting an assistant broader access than the requesting user;
-- automatic writes back to source systems;
-- indexing credentials, session material, or restricted medical data.
-
-## Source Connector List
-
-Connectors are enabled individually and declare record/field allowlists.
-
-### Phase 1
-
-| Source | Initial scope | Classification | Notes |
-| --- | --- | --- | --- |
-| Repository Markdown | Allowlisted public docs and runbooks | Public/Internal | File path and commit SHA are source identity |
-| GitHub | Allowlisted issues, PRs, comments, and merged metadata | Public | Read-only first prototype |
-| Meeting records | Reviewed summaries, decisions, actions, and questions | Internal/Confidential | Raw transcripts use separate permission and index |
-
-### Phase 2
-
-| Source | Initial scope | Classification | Notes |
-| --- | --- | --- | --- |
-| Leantime | Allowlisted projects/tasks/comments | Internal/Confidential | Client-specific data remains private |
-| Baserow | Approved relationship/organization records | Confidential | Field-level allowlist required |
-| EspoCRM | Approved Leads, Opportunities, Accounts, Contacts, Tasks | Confidential | Active pipeline remains canonical in EspoCRM |
-
-### Deferred
-
-| Source | Reason |
-| --- | --- |
-| Gmail | High-volume confidential content; begin with explicit referenced messages, not mailbox sync |
-| Raw meeting transcripts | Higher consent and retention burden than reviewed records |
-| Attachments | Malware, format, copyright, and data-minimization concerns |
-| Production logs | Operational search belongs in Loki; only reviewed incident records enter memory |
-| Restricted rescue/medical data | Outside the initial platform-memory risk tolerance |
-
-## Canonical Memory Record
-
-Every indexed item is represented as a portable record:
-
-```json
-{
-  "schemaVersion": "1",
-  "id": "memory-record-uuid",
-  "source": {
-    "system": "github",
-    "repository": "The-Keep-Studios/thekeep-platform",
-    "entity": "issue",
-    "id": "16",
-    "url": "https://github.com/example/repository/issues/16",
-    "version": "source-version-or-updated-at",
-    "observedAt": "RFC3339 timestamp"
-  },
-  "record": {
-    "type": "issue",
-    "title": "Meeting Intelligence",
-    "summary": "Human-readable source-derived summary.",
-    "bodyMarkdown": "Portable normalized content.",
-    "status": "open",
-    "authors": ["source-actor-id"],
-    "createdAt": "RFC3339 timestamp",
-    "updatedAt": "RFC3339 timestamp",
-    "tags": ["meeting-intelligence"],
-    "links": []
-  },
-  "access": {
-    "classification": "public",
-    "workspaceId": "public",
-    "principals": [],
-    "groups": ["public"],
-    "policyVersion": "1"
-  },
-  "indexing": {
-    "contentHash": "sha256",
-    "connectorVersion": "connector-version",
-    "indexedAt": "RFC3339 timestamp",
-    "deletedAt": null
-  }
-}
-```
+# Knowledge Memory
 
-Requirements:
+The memory layer indexes canonical source records. It does not replace GitHub,
+Leantime, EspoCRM, Baserow, Gmail, or meeting storage, and embeddings are never
+the source of truth.
 
-- `source.system`, `source.entity`, and `source.id` form a stable source key;
-- source version and content hash make updates deterministic;
-- `bodyMarkdown` remains understandable without the index;
-- links identify related records without transferring ownership;
-- access attributes travel with every chunk and retrieval result;
-- deleted records become tombstones until derivative data is removed.
+## Source Plan
 
-## Markdown Export
+Start:
 
-```markdown
----
-memory_record_id: memory-record-uuid
-source_system: github
-source_entity: issue
-source_id: "16"
-source_url: https://github.com/example/repository/issues/16
-source_version: source-version
-classification: public
-indexed_at: RFC3339 timestamp
----
+- allowlisted public repository Markdown;
+- allowlisted public GitHub issues/PRs;
+- reviewed meeting summaries/decisions/actions.
 
-# Meeting Intelligence
+Later:
 
-Human-readable normalized content.
+- scoped Leantime, Baserow, and EspoCRM records;
+- explicitly referenced Gmail messages;
+- raw transcripts only behind separate permission/retention policy.
 
-## Source
+Do not initially index unrestricted mailboxes, attachments, production logs,
+credentials, or specially sensitive restricted records.
 
-- System: GitHub
-- Record: issue 16
-- Last observed: RFC3339 timestamp
-```
+## Canonical Record
 
-Exports preserve provenance and classification. They do not include embeddings.
+Each normalized record contains:
 
-## Storage Layers
+- stable memory ID;
+- source system/entity/ID/URL/version/observed time;
+- type, title, human-readable Markdown body, status, authors, timestamps, tags;
+- classification, workspace, groups/principals, policy version;
+- content hash, connector version, indexed/deleted timestamps.
 
-### Record Store
+The source key identifies updates. Markdown/JSON exports remain understandable
+without embeddings.
 
-The record store contains canonical normalized memory records and connector
-state. Initial direction:
+## Storage Direction
 
-- dedicated PostgreSQL database;
-- JSONB for source-specific metadata and access attributes;
-- normalized columns for source key, classification, workspace, timestamps,
-  content hash, and deletion state;
-- immutable source-version history where storage cost permits;
-- encrypted persistent storage and application-level access controls.
+Use PostgreSQL initially:
 
-### Search Index
+- normalized columns for source key, access, hashes, timestamps, and deletion;
+- JSONB for source-specific metadata;
+- full-text search for names, identifiers, phrases, and exact terms;
+- `pgvector` only when semantic search adds measured value;
+- separate chunks/vectors by embedding model version.
 
-Initial direction is hybrid PostgreSQL search:
+This avoids a separate search service before scale requires it. Move only when
+measured corpus, latency, isolation, or availability requirements justify the
+operational cost.
 
-- PostgreSQL full-text search for exact terms, names, identifiers, and phrases;
-- `pgvector` for semantic similarity;
-- reciprocal-rank or weighted fusion to combine lexical and vector results;
-- explicit filters for workspace, classification, source, entity, and time;
-- separate embedding rows by chunk and embedding-model version.
+Large documents and raw transcripts remain in their canonical/object stores.
 
-Why this direction:
+## Permissions
 
-- one operational database for the initial scale;
-- portable open-source components;
-- transactional update/tombstone behavior;
-- readable records remain available if vector generation fails;
-- avoids adding a distributed vector service before scale requires it.
+### Index Time
 
-Reconsider a dedicated search/vector backend only when measured corpus size,
-latency, isolation, or availability requirements exceed PostgreSQL.
-
-### Object Storage
-
-Large source documents and raw transcripts remain in their canonical stores or
-approved encrypted object storage. The memory database stores references and
-normalized text needed for the approved index.
-
-## Chunking And Embeddings
-
-Chunking is deterministic per record type:
-
-- preserve headings and list boundaries;
-- keep source record and section IDs;
-- avoid combining records or security classifications;
-- cap chunk size with overlap only within one source section;
-- store chunk text hash and ordinal;
-- regenerate when source, chunker, or normalization version changes.
-
-Embedding rules:
-
-- model is configured per classification;
-- confidential chunks cannot use an unapproved hosted embedding provider;
-- embedding model/version is stored with each vector;
-- failed embedding leaves lexical search available;
-- model changes create a new index generation before old vectors are removed.
-
-## Permission Model
-
-Permission is enforced before and after search.
-
-### Index-Time
-
-The connector:
-
-- authenticates with a dedicated read identity;
-- retrieves only allowed entities and fields;
-- assigns classification and workspace;
-- records source permissions or approved group mappings;
-- rejects records with unknown classification;
-- never indexes secrets or restricted fields.
-
-### Query-Time
-
-The retrieval service:
-
-1. validates the requesting principal;
-2. resolves permitted workspaces, groups, classifications, sources, and fields;
-3. applies filters in the database query;
-4. retrieves only authorized candidate chunks;
-5. reranks only those candidates;
-6. returns citations and access metadata;
-7. audits sensitive retrieval.
-
-Prompt instructions cannot change query filters.
-
-### Result-Time
-
-Before returning results:
-
-- recheck current source permission for high-risk sources when practical;
-- remove fields not allowed for the caller;
-- cap result and content size;
-- preserve classification in the response;
-- prevent caching across principals or workspaces;
-- avoid leaking the existence of unauthorized records through counts or errors.
-
-## Retrieval API
-
-Logical query:
-
-```json
-{
-  "query": "What did we decide about transcript ingestion?",
-  "sources": ["github", "meeting-records"],
-  "recordTypes": ["issue", "decision"],
-  "workspaceId": "internal",
-  "classificationMax": "confidential",
-  "timeRange": null,
-  "limit": 10
-}
-```
-
-Logical result:
-
-```json
-{
-  "results": [
-    {
-      "recordId": "memory-record-uuid",
-      "chunkId": "chunk-uuid",
-      "title": "Meeting Intelligence",
-      "excerpt": "The first implementation should accept an operator-selected transcript...",
-      "score": 0.91,
-      "source": {
-        "system": "github",
-        "entity": "issue",
-        "id": "16",
-        "url": "https://github.com/example/repository/issues/16"
-      },
-      "classification": "public",
-      "updatedAt": "RFC3339 timestamp"
-    }
-  ]
-}
-```
-
-The API accepts a maximum classification as a narrowing input only. It cannot
-elevate the caller above policy.
-
-## Indexing Workflow
-
-### Initial Index
-
-1. connector lists records within its configured scope;
-2. normalize and classify each record;
-3. calculate source version and content hash;
-4. write/update the memory record;
-5. create deterministic chunks;
-6. write lexical-search representation;
-7. generate approved embeddings;
-8. mark the connector cursor only after the batch commits;
-9. emit counts and redacted audit evidence.
-
-### Incremental Update
-
-- use source update timestamps, cursors, webhooks, or commit SHAs;
-- compare source version and content hash;
-- skip unchanged records;
-- create a new normalized version before replacing active chunks;
-- preserve source attribution;
-- use idempotency keys for every batch.
-
-### Deletion
-
-- record a source tombstone;
-- remove active chunks and vectors in the same logical operation;
-- invalidate caches;
-- retain only minimal redacted indexing/audit evidence;
-- verify deletion by source key;
-- account for backup expiration.
-
-### Reindex
-
-Reindex is generation-based:
-
-1. create a new generation for a connector/chunker/embedding version;
-2. build alongside the active generation;
-3. validate counts, permissions, citations, and sample queries;
-4. atomically activate the new generation;
-5. retain the old generation for a bounded rollback window;
-6. delete the old generation after validation.
-
-Reindexing never broadens source scope automatically.
+- dedicated read-only connector identity;
+- source/entity/field allowlists;
+- explicit classification/workspace;
+- reject unknown classification and restricted fields.
+
+### Query Time
+
+1. authenticate principal;
+2. resolve allowed workspaces, groups, classifications, sources, and fields;
+3. apply those filters in the database query;
+4. rank only authorized candidates;
+5. return source citations;
+6. audit sensitive retrieval.
+
+### Result Time
+
+- remove disallowed fields;
+- cap result/content size;
+- preserve classification;
+- partition caches by principal/workspace;
+- do not leak unauthorized record existence through counts/errors.
+
+Natural-language input can narrow scope, never expand it.
+
+## Retrieval Result
+
+Every result includes:
+
+- record/chunk ID;
+- title and short excerpt;
+- lexical/semantic score;
+- source system/entity/ID/URL/version;
+- classification and update time.
+
+Answers generated by #15 must cite these references.
+
+## Indexing
+
+Initial/incremental flow:
+
+1. list records inside configured scope;
+2. normalize, classify, hash, and upsert;
+3. create deterministic chunks that do not cross records/classifications;
+4. write full-text representation;
+5. generate approved embeddings;
+6. advance source cursor only after commit.
+
+Skip unchanged hashes. Use source version/cursor/webhook/commit SHA for updates.
+
+Deletion creates a tombstone, removes chunks/vectors/caches, and retains only
+minimal audit evidence.
+
+Reindex by generation:
+
+1. build a new connector/chunker/model generation beside the active one;
+2. validate counts, permissions, citations, deletion, and sample queries;
+3. atomically switch;
+4. retain old generation for a bounded rollback window;
+5. delete it after validation.
+
+Reindexing never broadens source scope.
 
 ## Deduplication
 
-Deduplication layers:
+- exact source key: same canonical record;
+- content hash: unchanged/exact duplicate content;
+- canonical URL/external ID: known reference;
+- fuzzy similarity: manual-review candidate only.
 
-1. exact source key identifies the same canonical record;
-2. content hash identifies unchanged or exact duplicate content;
-3. canonical URL or external ID identifies known cross-references;
-4. fuzzy similarity produces manual-review candidates only.
+Do not silently merge records from different owning systems.
 
-Records from different canonical systems are not silently merged. A GitHub
-issue and Leantime task may describe the same work but have different ownership,
-permissions, and lifecycle.
+## First Prototype
 
-## Read-Only Assistant Prototype
+Create a focused issue for a **cited public repository assistant**:
 
-Create a follow-up implementation issue for:
+- allowlisted Markdown and GitHub issues/PRs;
+- PostgreSQL full-text search first;
+- no confidential sources or write tools;
+- source citations and record versions;
+- incremental update, deletion, reindex, and rollback;
+- synthetic prompt-injection fixtures.
 
-**Cited public repository assistant**
+Evidence:
 
-Scope:
+- changed/deleted source updates search deterministically;
+- every answer cites source/version;
+- unknown repos/paths are rejected;
+- injected source text cannot invoke a tool;
+- exports remain readable without vectors;
+- logs/audit contain no credentials.
 
-- index allowlisted public Markdown files and GitHub issues/PRs;
-- use PostgreSQL full-text search first;
-- add `pgvector` only after lexical ingestion/reindexing is reliable;
-- answer through the #15 gateway with citations;
-- no confidential sources and no write tools;
-- synthetic injection fixtures in indexed content.
+## Operations
 
-Acceptance evidence:
+Track connector cursor, active generation, indexed/deleted counts, failures,
+embedding status, latency, and permission denials. Provide per-connector and
+per-provider kill switches, rate limits, backoff, backups, and restore tests.
 
-- every answer cites source URL and record version;
-- changed source is reflected after incremental indexing;
-- deleted source disappears from search;
-- reindex can switch generations and roll back;
-- prompt injection in source text cannot cause a tool call;
-- unknown repositories and paths are rejected;
-- index and audit logs contain no credentials;
-- Markdown/JSON export recreates readable records without embeddings.
+## Decisions Needed
 
-## Operational Requirements
-
-- connector, indexing, embedding, and query metrics;
-- alerts for stale cursors, failed batches, permission errors, deletion backlog,
-  and embedding failures;
-- per-source rate limits and exponential backoff;
-- database backups and restore verification;
-- migration and rollback for record/schema changes;
-- health checks that distinguish lexical search from embedding availability;
-- admin views for connector scope, cursor, generation, record counts, failures,
-  and deletion status;
-- kill switch per source connector and embedding provider.
-
-## Security And Privacy Tests
-
-- unauthorized workspace returns no records or counts;
-- restricted field never appears in chunks or audit logs;
-- changing group membership invalidates cached access;
-- public and confidential indexes cannot cross-query;
-- malicious source instructions remain quoted data;
-- hosted embedding fallback is denied for confidential records;
-- deletion removes all chunks, vectors, and cache entries;
-- connector credentials cannot write to the source system;
-- oversized and malformed source records fail without stopping other records;
-- source URLs and excerpts are escaped before UI rendering.
-
-## Open Decisions
-
-- PostgreSQL deployment and backup ownership;
-- full-text language configuration;
-- initial local embedding model and quality threshold;
-- whether confidential sources need physically separate databases or schemas;
-- maximum retention for normalized historical versions;
-- which source permissions require live recheck at query time;
-- whether the first assistant uses only lexical search or hybrid search;
-- expected corpus size and latency targets that would trigger a dedicated
-  search backend.
+- PostgreSQL ownership/backup;
+- initial local embedding model;
+- physical separation required for confidential sources;
+- historical version retention;
+- which permissions require live source recheck;
+- lexical-only versus hybrid first release;
+- measured threshold for a dedicated search backend.
