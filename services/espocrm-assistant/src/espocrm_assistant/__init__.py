@@ -1,0 +1,1 @@
+"""Constrained EspoCRM assistant boundary."""
