@@ -144,6 +144,56 @@ Target for full production:
 - Test static rendering and local smoke paths before applying changes to production.
 - Make observability and rollback part of every service change, especially for public endpoints and stateful workloads.
 
+### Local Development and IaC Testing
+
+This repository should catch infrastructure breakage before changes hit the live k3s cluster. The local path has three layers:
+1. Static checks that do not need a cluster.
+2. A disposable k3d cluster for workload smoke tests.
+3. Browser observation against the running local app.
+
+**Static Checks:**
+
+Run:
+```bash
+scripts/test-iac-static.sh
+```
+This checks Git whitespace, shell syntax, Kustomize rendering, and Ansible syntax. It is the first check to run before committing an IaC change.
+
+**Ansible Workstation Setup:**
+
+Use the Ansible entrypoint to prepare and validate a local development environment:
+```bash
+ansible-playbook -i ansible/inventory.ini ansible/setup_dev_environment.yml
+```
+This runs the `platform` profile by default (static checks, k3d preflight, cluster creation, and app smoke tests).
+
+**Disposable k3s Cluster:**
+
+Create or reuse a local k3d cluster:
+```bash
+scripts/dev-cluster-up.sh
+```
+Delete it when finished: `scripts/dev-cluster-down.sh`.
+
+**App Smoke Tests:**
+
+Use the generic target-based smoke entrypoint:
+```bash
+scripts/dev-smoke.sh <app-target>  # e.g., wisemapping, leantime, baserow, platform
+```
+The smoke scripts create the cluster (if missing), create dev-only secrets, apply manifests, and probe app-specific endpoints from inside the cluster.
+
+**App Manual Observation:**
+
+After smoke tests pass, open the actual running app:
+```bash
+scripts/dev-observe.sh <app-target>
+```
+The observe scripts port-forward the target service and open the app in your desktop browser.
+
+**Limits:**
+This local path does not replace production validation. It does not test Cloudflare Tunnels, external DNS, real TLS, Authentik integration, or production backup/restore gates.
+
 ### Human And AI Collaboration
 
 - Humans own product intent, production risk, secrets, live approvals, and final merge decisions.
@@ -314,6 +364,29 @@ sudo -u k3s-admin -H env KUBECONFIG=/home/k3s-admin/.kube/config kubectl get cro
 bash scripts/restore-leantime-backup.sh /path/to/backup.sql.gz
 ```
 
+### Optional CRM Apps
+
+Baserow is the core relationship-management app. Twenty and EspoCRM are optional and disabled by default.
+
+**GitOps Enablement:**
+
+Enable either app in `ansible/production_vars.yml`:
+```yaml
+platform_optional_apps:
+  twenty:
+    enabled: true
+  espocrm:
+    enabled: false
+```
+
+Add required secrets (passwords, keys) in `platform_secrets` as documented in `docs/optional-crm-apps.md`.
+
+**EspoCRM Email Allowlist:**
+EspoCRM can optionally manage its `emailServerAllowedAddressList`. Set `email_server_allowlist_profile: gmail` in `ansible/production_vars.yml` to allow standard Google mail endpoints.
+
+**Backups:**
+Each optional app includes its own backup CronJob (`twenty-backup` or `espocrm-backup`). Validate backups manually before putting real data into either CRM.
+
 ### Cluster Inspection
 
 Run cluster inspection commands as `k3s-admin` on the production host:
@@ -409,12 +482,66 @@ kubectl annotate application platform-root -n argocd \
   argocd.argoproj.io/refresh=hard --overwrite
 ```
 
-### OIDC Notes
+### OIDC and Forward Auth
 
 Authentik is the intended internal identity hub. Configure Google once in Authentik upstream.
-For the platform-wide forward-auth path, see `docs/authentik-sso.md`.
+For the platform-wide forward-auth path, see the "Authentik SSO Runbook" below.
 
-Callback URLs:
+#### Authentik SSO Runbook
+
+Authentik is the platform identity hub. Use native OIDC for apps that support it well, and use Authentik Proxy Provider forward-auth for apps that need an external auth gate.
+
+**Current Pattern:**
+
+The Authentik deployment includes:
+- `identity/authentik-forward-auth`: Traefik `Middleware` for Authentik forward-auth.
+- `identity/authentik-forward-auth-outpost-routes`: an Ingress that routes `/outpost.goauthentik.io/*` on protected app hosts back to Authentik's embedded outpost.
+
+The middleware is intentionally not attached to app ingresses by default. Attach it only after the Authentik Proxy Provider exists and the outpost route has been validated.
+
+**Authentik Setup:**
+
+In Authentik admin:
+1. Confirm `authentik Embedded Outpost` has `authentik_host` set to `https://auth.thekeepstudios.com`.
+2. Create a Proxy Provider for platform forward-auth.
+3. Use Forward auth mode. Domain-level mode is the fastest internal-tools gate; single-application mode gives better per-app access control.
+4. Create or attach an Authentik Application for the provider.
+5. Assign the provider to `authentik Embedded Outpost`.
+
+After saving, test an outpost route:
+
+```bash
+curl -I https://baserow.thekeepstudios.com/outpost.goauthentik.io/ping
+```
+
+A healthy route returns `204` or an Authentik-managed response, not a Traefik `404` and not the upstream application.
+
+**Enable Forward Auth:**
+
+Apply the middleware annotation to each app ingress once the provider is ready:
+
+```bash
+kubectl annotate ingress baserow-ingress -n baserow \
+  traefik.ingress.kubernetes.io/router.middlewares=identity-authentik-forward-auth@kubernetescrd \
+  --overwrite
+```
+
+For monitoring, replace the current BasicAuth middleware in `kubernetes/platform/monitoring/kube-prometheus-stack.values.yaml` with:
+
+```yaml
+traefik.ingress.kubernetes.io/router.middlewares: identity-authentik-forward-auth@kubernetescrd
+```
+
+**Native OIDC Follow-Up:**
+
+Native app SSO is preferable when the app handles authorization cleanly:
+- Leantime reads OIDC settings from `platform_oidc.leantime` and the `leantime-oidc` secret.
+- WiseMapping has an `oidc` Spring profile but needs Authentik client values in `platform_oidc.wisemapping`.
+- Argo CD, Grafana, and GitLab should move from proxy-only gates to native OIDC once provider automation is in place.
+
+Keep Baserow and EspoCRM behind forward-auth unless a supported native OIDC configuration is deliberately added and tested.
+
+#### Callback URLs:
 
 - Leantime: `https://projects.thekeepstudios.com/oidc/callback`
 - WiseMapping: `https://mindmaps.thekeepstudios.com/login/oauth2/code/google`
@@ -468,6 +595,27 @@ After editing `ansible/production_vars.yml`, apply with:
 ansible-playbook -K -i ansible/inventory.production.ini ansible/setup_k3s_production.yml
 ```
 
+### Leantime UI and MCP Routing
+
+The public Leantime host has two distinct responsibilities:
+- `https://projects.thekeepstudios.com/dashboard/home` and other normal paths serve the Leantime UI.
+- `https://projects.thekeepstudios.com/mcp` serves the MCP streamable HTTP transport.
+
+An exact request to `/` is handled by Traefik and redirected to `/dashboard/home`. This prevents an enabled plugin from replacing Leantime's authenticated default route.
+
+**Validation:**
+Run the anonymous route checks:
+```bash
+scripts/check-leantime-routing.sh
+```
+To verify the authenticated browser behavior or the MCP stream, see the script's help output or provide `LEANTIME_BROWSER_COOKIE` / `LEANTIME_MCP_TOKEN` variables.
+
+**Security Boundary:**
+- Keep MCP traffic on the dedicated `/mcp` path. Do not expose it at `/`.
+- Require a personal access token or scoped API credential for every MCP client.
+- Treat MCP as a privileged automation interface: it can read and mutate project data with the permissions of its token.
+- For broader or external access, move MCP behind Cloudflare Access or an internal-only hostname and apply IP allowlisting.
+
 ### Migration From Legacy Script-Managed Cluster
 
 If a cluster was previously deployed through legacy standalone scripts, migrate to the Ansible-first flow:
@@ -520,6 +668,27 @@ This is the backlog for moving from production-like to high availability:
 - Validate Leantime SMTP delivery with a real invitation/password-reset smoke test after SMTP credentials are configured.
 - Keep the automation suitable for open-source reuse by documenting required domain names, redirect URLs, and operator-provided secrets.
 
+## App Documentation Index
+
+For details too specific or procedural for this README, see the tracked documentation:
+
+### Platform Initiatives
+- [Internal AI Gateway Architecture](docs/ai-gateway.md): Proposal for the secure AI-services layer.
+- [AI Hardening Gate](docs/ai-hardening.md): Security invariants and release levels for AI services.
+
+### Development and Operations
+- [Local Development & IaC Testing](#local-development-and-iac-testing): Integrated into this README.
+- [Authentik SSO Runbook](#authentik-sso-runbook): Integrated into this README.
+- [Leantime Routing Contract](#leantime-ui-and-mcp-routing): Integrated into this README.
+- [Optional CRM Apps](#optional-crm-apps): Integrated into this README.
+
+### Relationship OS
+- [Implementation Plan](docs/relationship-os/implementation-plan.md): Rollout strategy for Baserow-based relationship management.
+- [Data Boundary Policy](docs/relationship-os/data-boundary-policy.md): Rules for entity and workspace data promotion.
+- [Baserow Schema](docs/relationship-os/baserow-schema.md): Table and field definitions.
+- [Baserow Restore Runbook](docs/relationship-os/restore-runbook.md): Disaster recovery for Relationship OS data.
+- [GetBuddy Diligence Checklist](docs/relationship-os/getbuddy-diligence.md): Decision gate for external data integration.
+
 ## File Map
 
 - k3s production bootstrap playbook: `ansible/setup_k3s_production.yml`
@@ -527,7 +696,7 @@ This is the backlog for moving from production-like to high availability:
 - Cloudflare Tunnel edge deployment: `kubernetes/platform/cloudflared/*`
 - GitOps apps/root: `kubernetes/gitops/*`
 - Leantime backup CronJob: `kubernetes/apps/leantime/backup-cronjob.yaml`
-- Leantime UI/MCP route contract: `docs/leantime-mcp-routing.md`
+- Leantime UI/MCP route contract: Integrated into README
 - Leantime UI/MCP route probe: `scripts/check-leantime-routing.sh`
 - Runtime env template: `scripts/production.env.example`
 - OIDC reconcile helper: `scripts/reconcile-oidc.sh`
