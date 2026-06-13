@@ -33,7 +33,7 @@ k3s_version: "v1.35.3+k3s1"
 
 # GitOps Configuration
 gitops_repo_url: "https://github.com/The-Keep-Studios/thekeep-platform.git"
-gitops_revision: "main"
+gitops_revision: "v0.1.0-alpha.1"
 gitops_repo_private: false
 # If gitops_repo_private is true, provide credentials in ansible/production_vars.yml:
 #   gitops_repo_ssh_private_key: "...", or
