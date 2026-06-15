@@ -27,6 +27,9 @@ platform_secrets:
   espocrm_db_root_password: "CHANGE_ME"
   espocrm_db_password: "CHANGE_ME"
   espocrm_admin_password: "CHANGE_ME"
+  espocrm_assistant_read_api_key: "CHANGE_ME"
+  espocrm_assistant_read_secret_key: ""
+  espocrm_assistant_token: "CHANGE_ME"
 
 # Optional CRM app toggles. Baserow remains the core relationship-management app.
 # platform_optional_apps:
@@ -40,6 +43,8 @@ platform_secrets:
 #     email_server_allowed_address_list:
 #       - "imap.example.com:993"
 #       - "smtp.example.com:587"
+#   espocrm_assistant:
+#     enabled: false
 
 # Optional: enable these only when gitops_repo_private is true.
 # gitops_repo_ssh_private_key_path: "/path/to/argocd-readonly-key"

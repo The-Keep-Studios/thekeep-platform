@@ -10,6 +10,7 @@ dependencies = ["mcp>=1.14,<2"]
 
 [project.scripts]
 thekeep-espocrm-mcp = "espocrm_assistant.server:main"
+thekeep-espocrm-http = "espocrm_assistant.http_server:main"
 thekeep-espocrm-apply = "espocrm_assistant.apply:main"
 
 [tool.setuptools.packages.find]

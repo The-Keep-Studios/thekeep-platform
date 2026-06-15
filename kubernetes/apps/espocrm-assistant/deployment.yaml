@@ -1,0 +1,80 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: espocrm-assistant
+  namespace: espocrm
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: espocrm-assistant
+  template:
+    metadata:
+      labels:
+        app: espocrm-assistant
+    spec:
+      containers:
+      - name: assistant
+        image: ghcr.io/the-keep-studios/thekeep-platform/espocrm-assistant:0.1.0
+        imagePullPolicy: IfNotPresent
+        env:
+        - name: ESPOCRM_URL
+          value: http://espocrm.espocrm.svc.cluster.local
+        - name: ESPOCRM_ALLOW_HTTP
+          value: "1"
+        - name: ESPOCRM_READ_AUTH_METHOD
+          value: apikey
+        - name: ESPOCRM_READ_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: espocrm-assistant-secrets
+              key: ESPOCRM_READ_API_KEY
+        - name: ESPOCRM_READ_SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: espocrm-assistant-secrets
+              key: ESPOCRM_READ_SECRET_KEY
+              optional: true
+        - name: ESPOCRM_ASSISTANT_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: espocrm-assistant-secrets
+              key: ESPOCRM_ASSISTANT_TOKEN
+        ports:
+        - name: http
+          containerPort: 8080
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: http
+          periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 6
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: http
+          periodSeconds: 30
+          timeoutSeconds: 3
+          failureThreshold: 4
+        resources:
+          requests:
+            cpu: 25m
+            memory: 96Mi
+          limits:
+            cpu: 250m
+            memory: 256Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: espocrm-assistant
+  namespace: espocrm
+spec:
+  type: ClusterIP
+  selector:
+    app: espocrm-assistant
+  ports:
+  - name: http
+    port: 8080
+    targetPort: http

@@ -1,0 +1,39 @@
+name: EspoCRM Assistant Image
+
+on:
+  push:
+    branches:
+    - main
+    tags:
+    - v*
+    paths:
+    - services/espocrm-assistant/**
+    - .github/workflows/espocrm-assistant-image.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Check out repository
+      uses: actions/checkout@v4
+
+    - name: Log in to GitHub Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Build and publish image
+      uses: docker/build-push-action@v6
+      with:
+        context: services/espocrm-assistant
+        push: true
+        tags: |
+          ghcr.io/the-keep-studios/thekeep-platform/espocrm-assistant:0.1.0
+          ghcr.io/the-keep-studios/thekeep-platform/espocrm-assistant:${{ github.sha }}

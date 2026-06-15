@@ -264,7 +264,7 @@
     - name: twenty
       enabled: "{{ ((platform_optional_apps | default({})).twenty | default({})).enabled | default(false) | bool }}"
     - name: espocrm
-      enabled: "{{ ((platform_optional_apps | default({})).espocrm | default({})).enabled | default(false) | bool }}"
+      enabled: "{{ (((platform_optional_apps | default({})).espocrm | default({})).enabled | default(false) | bool) or (((platform_optional_apps | default({})).espocrm_assistant | default({})).enabled | default(false) | bool) }}"
   when: item.enabled | bool
   changed_when: >
     optional_namespace_apply.stdout is defined and
@@ -425,6 +425,37 @@
   environment: "{{ platform_kubectl_env }}"
   no_log: true
   when: ((platform_optional_apps | default({})).espocrm | default({})).enabled | default(false) | bool
+
+- name: Apply EspoCRM assistant optional app secret
+  ansible.builtin.command:
+    argv:
+      - "{{ platform_kubectl }}"
+      - apply
+      - -f
+      - "-"
+  args:
+    stdin: >-
+      {{
+        {
+          'apiVersion': 'v1',
+          'kind': 'Secret',
+          'metadata': {
+            'name': 'espocrm-assistant-secrets',
+            'namespace': 'espocrm'
+          },
+          'type': 'Opaque',
+          'stringData': {
+            'ESPOCRM_READ_API_KEY': platform_secrets.espocrm_assistant_read_api_key | default(''),
+            'ESPOCRM_READ_SECRET_KEY': platform_secrets.espocrm_assistant_read_secret_key | default(''),
+            'ESPOCRM_ASSISTANT_TOKEN': platform_secrets.espocrm_assistant_token | default('')
+          }
+        } | to_nice_yaml
+      }}
+  become: true
+  become_user: k3s-admin
+  environment: "{{ platform_kubectl_env }}"
+  no_log: true
+  when: ((platform_optional_apps | default({})).espocrm_assistant | default({})).enabled | default(false) | bool
 
 - name: Apply Grafana admin secret
   ansible.builtin.command:

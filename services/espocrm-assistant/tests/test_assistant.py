@@ -10,6 +10,7 @@ from pathlib import Path
 
 from espocrm_assistant.client import EspoClient
 from espocrm_assistant.executor import apply_change
+from espocrm_assistant.http_server import dispatch
 from espocrm_assistant.policy import PolicyError, export_csv, prepare_change
 from espocrm_assistant.service import EspoAssistant
 
@@ -170,6 +171,43 @@ class ServiceTests(unittest.TestCase):
         })
         self.assertEqual(len({(item["entity"], item["id"]) for item in found}), len(found))
         self.assertNotIn("secret", found[0])
+
+
+class HttpDispatchTests(unittest.TestCase):
+    def test_dispatch_exposes_read_and_prepare_tools_only(self):
+        class Assistant:
+            def __init__(self):
+                self.calls = []
+
+            def search(self, **payload):
+                self.calls.append(("search", payload))
+                return {"total": 0, "list": []}
+
+            def get(self, **payload):
+                self.calls.append(("get", payload))
+                return {"id": payload["record_id"]}
+
+            def metadata(self, **payload):
+                self.calls.append(("metadata", payload))
+                return {}
+
+            def duplicate_candidates(self, **payload):
+                self.calls.append(("duplicate", payload))
+                return []
+
+            def prepare_change(self, **payload):
+                self.calls.append(("prepare", payload))
+                return {"sha256": "abc"}
+
+            def export_csv(self, changes):
+                self.calls.append(("export", changes))
+                return "operation,entity\n"
+
+        assistant = Assistant()
+        self.assertEqual({"total": 0, "list": []}, dispatch(assistant, "/crm/search", {"entity": "Lead"}))
+        self.assertEqual({"csv": "operation,entity\n"}, dispatch(assistant, "/crm/export-csv", {"changes": []}))
+        with self.assertRaises(KeyError):
+            dispatch(assistant, "/crm/apply", {})
 
 
 class ExecutorTests(unittest.TestCase):
