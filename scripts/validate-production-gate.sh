@@ -30,6 +30,7 @@ HTTPS_ENDPOINTS=(
 )
 
 PROTECTED_HTTPS_ENDPOINTS=(
+  https://crm.thekeepstudios.com
   https://prometheus.thekeepstudios.com
   https://alerts.thekeepstudios.com
 )

@@ -41,27 +41,6 @@ platform_secrets:
 #       - "imap.example.com:993"
 #       - "smtp.example.com:587"
 
-# Public hostname overrides. The defaults in group_vars/all.yml target TKS; set
-# these for whitelabeled deployments before rendering/applying platform config.
-# platform_domains:
-#   base: example.com
-#   authentik: auth.example.com
-#   leantime: projects.example.com
-#   wisemapping: mindmaps.example.com
-#   baserow: baserow.example.com
-#   baserow_crm: crm.example.com
-#   grafana: grafana.example.com
-#   prometheus: prometheus.example.com
-#   alertmanager: alerts.example.com
-#   argocd: argocd.example.com
-#   twenty: twenty.example.com
-#   espocrm: espocrm.example.com
-#
-# platform_baserow:
-#   public_url: "https://baserow.example.com"
-#   builder_domains:
-#     - "crm.example.com"
-
 # Optional: enable these only when gitops_repo_private is true.
 # gitops_repo_ssh_private_key_path: "/path/to/argocd-readonly-key"
 # gitops_repo_ssh_private_key: |
