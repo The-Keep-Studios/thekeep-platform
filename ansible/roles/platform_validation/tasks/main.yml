@@ -10,6 +10,28 @@
     platform_validation_leantime_mcp_enabled: "{{ (platform_leantime_mcp | default({})).enabled | default(false) | bool }}"
     platform_validation_leantime_mcp_path: "{{ (platform_leantime_mcp | default({})).endpoint_path | default('/mcp') }}"
 
+- name: Define public endpoint validation targets
+  ansible.builtin.set_fact:
+    platform_validation_public_https_endpoints: >-
+      {{
+        [
+          'https://' ~ ((platform_domains | default({})).authentik | default('auth.thekeepstudios.com')),
+          'https://' ~ ((platform_domains | default({})).leantime | default('projects.thekeepstudios.com')),
+          'https://' ~ ((platform_domains | default({})).wisemapping | default('mindmaps.thekeepstudios.com')),
+          'https://' ~ ((platform_domains | default({})).baserow | default('baserow.thekeepstudios.com')),
+          'https://' ~ ((platform_domains | default({})).grafana | default('grafana.thekeepstudios.com')),
+          'https://' ~ ((platform_domains | default({})).prometheus | default('prometheus.thekeepstudios.com')),
+          'https://' ~ ((platform_domains | default({})).alertmanager | default('alerts.thekeepstudios.com')),
+          'https://' ~ ((platform_domains | default({})).argocd | default('argocd.thekeepstudios.com'))
+        ]
+        + (((platform_baserow | default({})).builder_domains | default([])) | map('regex_replace', '^', 'https://') | list)
+        + (['https://' ~ ((platform_domains | default({})).twenty | default('twenty.thekeepstudios.com'))] if (platform_validation_twenty_enabled | bool) else [])
+        + (['https://' ~ ((platform_domains | default({})).espocrm | default('espocrm.thekeepstudios.com'))] if (platform_validation_espocrm_enabled | bool) else [])
+      }}
+    platform_validation_protected_https_endpoints:
+      - "https://{{ ((platform_domains | default({})).prometheus | default('prometheus.thekeepstudios.com')) }}"
+      - "https://{{ ((platform_domains | default({})).alertmanager | default('alerts.thekeepstudios.com')) }}"
+
 - name: Check Kubernetes API connectivity
   ansible.builtin.command:
     argv:
@@ -765,7 +787,7 @@
     url: "{{ item }}"
     status_code: [200, 401, 403]
     timeout: 15
-  loop: "{{ ['https://auth.thekeepstudios.com', 'https://projects.thekeepstudios.com', 'https://mindmaps.thekeepstudios.com', 'https://baserow.thekeepstudios.com', 'https://grafana.thekeepstudios.com', 'https://prometheus.thekeepstudios.com', 'https://alerts.thekeepstudios.com', 'https://argocd.thekeepstudios.com'] + (['https://twenty.thekeepstudios.com'] if (platform_validation_twenty_enabled | bool) else []) + (['https://espocrm.thekeepstudios.com'] if (platform_validation_espocrm_enabled | bool) else []) }}"
+  loop: "{{ platform_validation_public_https_endpoints }}"
   when: require_external_https | default(true) | bool
 
 - name: Verify protected endpoints require authentication
@@ -774,9 +796,7 @@
     status_code: [401, 403]
     timeout: 15
     follow_redirects: all
-  loop:
-    - https://prometheus.thekeepstudios.com
-    - https://alerts.thekeepstudios.com
+  loop: "{{ platform_validation_protected_https_endpoints }}"
   when: require_external_https | default(true) | bool
 
 - name: Ensure direct_http_urls is not empty when HTTPS is required

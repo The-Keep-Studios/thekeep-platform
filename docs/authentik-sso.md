@@ -34,6 +34,7 @@ After saving, test an outpost route:
 
 ```bash
 curl -I https://baserow.thekeepstudios.com/outpost.goauthentik.io/ping
+curl -I https://crm.thekeepstudios.com/outpost.goauthentik.io/ping
 ```
 
 A healthy route returns `204` or an Authentik-managed response, not a Traefik
@@ -92,4 +93,3 @@ Native app SSO is preferable when the app handles authorization cleanly:
 
 Keep Baserow and EspoCRM behind forward-auth unless a supported native OIDC
 configuration is deliberately added and tested.
-

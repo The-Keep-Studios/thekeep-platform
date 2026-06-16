@@ -59,6 +59,27 @@ platform_leantime_mcp:
   enabled: false
   endpoint_path: /mcp
 
+# Public hostnames. These defaults match the committed production manifests and
+# provide the configuration surface for future whitelabeled deployments.
+platform_domains:
+  base: thekeepstudios.com
+  authentik: auth.thekeepstudios.com
+  leantime: projects.thekeepstudios.com
+  wisemapping: mindmaps.thekeepstudios.com
+  baserow: baserow.thekeepstudios.com
+  baserow_crm: crm.thekeepstudios.com
+  grafana: grafana.thekeepstudios.com
+  prometheus: prometheus.thekeepstudios.com
+  alertmanager: alerts.thekeepstudios.com
+  argocd: argocd.thekeepstudios.com
+  twenty: twenty.thekeepstudios.com
+  espocrm: espocrm.thekeepstudios.com
+
+platform_baserow:
+  public_url: "https://{{ platform_domains.baserow }}"
+  builder_domains:
+    - "{{ platform_domains.baserow_crm }}"
+
 # Optional CRM apps. Baserow remains the core relationship-management app.
 platform_optional_apps:
   twenty:

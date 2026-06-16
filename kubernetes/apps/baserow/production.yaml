@@ -39,6 +39,8 @@ spec:
         env:
         - name: BASEROW_PUBLIC_URL
           value: https://baserow.thekeepstudios.com
+        - name: BASEROW_BUILDER_DOMAINS
+          value: crm.thekeepstudios.com
         - name: BASEROW_RUN_MINIMAL
           value: "yes"
         - name: BASEROW_AMOUNT_OF_WORKERS
@@ -126,6 +128,16 @@ metadata:
 spec:
   rules:
   - host: baserow.thekeepstudios.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: baserow
+            port:
+              number: 80
+  - host: crm.thekeepstudios.com
     http:
       paths:
       - path: /

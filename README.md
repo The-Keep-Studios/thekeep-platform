@@ -181,6 +181,7 @@ This assumes a fresh Ubuntu/Debian host and no existing infrastructure.
    - `projects.thekeepstudios.com`
    - `mindmaps.thekeepstudios.com`
    - `baserow.thekeepstudios.com`
+   - `crm.thekeepstudios.com`
    - `grafana.thekeepstudios.com`
    - `prometheus.thekeepstudios.com`
    - `alerts.thekeepstudios.com`

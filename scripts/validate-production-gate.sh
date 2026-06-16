@@ -22,6 +22,7 @@ HTTPS_ENDPOINTS=(
   https://projects.thekeepstudios.com
   https://mindmaps.thekeepstudios.com
   https://baserow.thekeepstudios.com
+  https://crm.thekeepstudios.com
   https://grafana.thekeepstudios.com
   https://prometheus.thekeepstudios.com
   https://alerts.thekeepstudios.com
