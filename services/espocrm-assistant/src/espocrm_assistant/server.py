@@ -8,7 +8,13 @@ from mcp.server.fastmcp import FastMCP
 from .client import EspoClient
 from .service import EspoAssistant
 
-mcp = FastMCP("thekeep-espocrm")
+mcp = FastMCP(
+    "thekeep-espocrm",
+    host=os.getenv("ESPOCRM_MCP_HOST", "127.0.0.1"),
+    port=int(os.getenv("ESPOCRM_MCP_PORT", "8080")),
+    streamable_http_path=os.getenv("ESPOCRM_MCP_PATH", "/mcp"),
+    stateless_http=os.getenv("ESPOCRM_MCP_STATELESS_HTTP", "1") == "1",
+)
 _service: EspoAssistant | None = None
 
 
@@ -67,8 +73,18 @@ def crm_export_csv(changes: list[dict[str, Any]]) -> str:
     return service().export_csv(changes)
 
 
+@mcp.tool()
+def crm_prepare_lead_conversion(request: dict[str, Any]) -> Any:
+    """Prepare linked Lead-to-Opportunity change sets for human approval."""
+    return service().prepare_lead_conversion(**request)
+
+
 def main() -> None:
     mcp.run(transport="stdio")
+
+
+def main_streamable_http() -> None:
+    mcp.run(transport="streamable-http")
 
 
 if __name__ == "__main__":

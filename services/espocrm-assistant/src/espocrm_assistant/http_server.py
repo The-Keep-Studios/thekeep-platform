@@ -2,14 +2,18 @@ from __future__ import annotations
 
 import json
 import os
+import hmac
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
 from typing import Any
 
 from .client import EspoClient, EspoError
+from .executor import apply_change
 from .policy import PolicyError
 from .service import EspoAssistant
 
 _service: EspoAssistant | None = None
+_write_client: EspoClient | None = None
 
 
 def service() -> EspoAssistant:
@@ -25,6 +29,28 @@ def service() -> EspoAssistant:
     return _service
 
 
+def write_client() -> EspoClient:
+    global _write_client
+    if _write_client is None:
+        _write_client = EspoClient(
+            os.environ["ESPOCRM_URL"],
+            os.environ["ESPOCRM_WRITE_API_KEY"],
+            secret_key=os.getenv("ESPOCRM_WRITE_SECRET_KEY"),
+            auth_method=os.getenv("ESPOCRM_WRITE_AUTH_METHOD", "apikey"),
+            allow_http=os.getenv("ESPOCRM_ALLOW_HTTP") == "1",
+        )
+    return _write_client
+
+
+def audit_log_path() -> Path:
+    return Path(
+        os.getenv(
+            "ESPOCRM_ASSISTANT_AUDIT_LOG",
+            "~/.local/state/thekeep/espocrm-assistant-audit.jsonl",
+        )
+    ).expanduser()
+
+
 def dispatch(assistant: EspoAssistant, path: str, payload: dict[str, Any]) -> Any:
     if path == "/crm/search":
         return assistant.search(**payload)
@@ -36,9 +62,24 @@ def dispatch(assistant: EspoAssistant, path: str, payload: dict[str, Any]) -> An
         return assistant.duplicate_candidates(**payload)
     if path == "/crm/prepare-change":
         return assistant.prepare_change(**payload)
+    if path == "/crm/prepare-lead-conversion":
+        return assistant.prepare_lead_conversion(**payload)
     if path == "/crm/export-csv":
         return {"csv": assistant.export_csv(payload.get("changes", []))}
     raise KeyError(path)
+
+
+def dispatch_approval(client: EspoClient, payload: dict[str, Any], audit_log: Path) -> dict[str, Any]:
+    change = payload.get("change")
+    if not isinstance(change, dict):
+        raise ValueError("change is required")
+    return apply_change(
+        client,
+        change,
+        approved_sha256=str(payload.get("approved_sha256", "")),
+        approved_by=str(payload.get("approved_by", "")),
+        audit_log=audit_log,
+    )
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -55,11 +96,23 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
-    def _authorized(self) -> bool:
-        token = os.getenv("ESPOCRM_ASSISTANT_TOKEN", "")
+    def _authorized(self, env_name: str) -> bool:
+        token = os.getenv(env_name, "")
         if not token:
             return False
-        return self.headers.get("Authorization") == f"Bearer {token}"
+        return hmac.compare_digest(
+            self.headers.get("Authorization", ""),
+            f"Bearer {token}",
+        )
+
+    def _read_payload(self) -> dict[str, Any]:
+        length = int(self.headers.get("Content-Length", "0"))
+        if length > 1_000_000:
+            raise OverflowError("request too large")
+        payload = json.loads(self.rfile.read(length) or b"{}")
+        if not isinstance(payload, dict):
+            raise ValueError("request body must be a JSON object")
+        return payload
 
     def do_GET(self) -> None:
         if self.path == "/healthz":
@@ -68,18 +121,27 @@ class Handler(BaseHTTPRequestHandler):
         self._send(404, {"error": "not found"})
 
     def do_POST(self) -> None:
-        if not self._authorized():
+        if self.path == "/approval/apply-change":
+            if not self._authorized("ESPOCRM_ASSISTANT_APPLY_TOKEN"):
+                self._send(401, {"error": "unauthorized"})
+                return
+            try:
+                report = dispatch_approval(write_client(), self._read_payload(), audit_log_path())
+                self._send(200 if report.get("status") == "applied" else 409, report)
+            except OverflowError as error:
+                self._send(413, {"error": str(error)})
+            except (EspoError, PolicyError, ValueError, TypeError, json.JSONDecodeError) as error:
+                self._send(400, {"error": str(error)})
+            return
+
+        if not self._authorized("ESPOCRM_ASSISTANT_TOKEN"):
             self._send(401, {"error": "unauthorized"})
             return
         try:
-            length = int(self.headers.get("Content-Length", "0"))
-            if length > 1_000_000:
-                self._send(413, {"error": "request too large"})
-                return
-            payload = json.loads(self.rfile.read(length) or b"{}")
-            if not isinstance(payload, dict):
-                raise ValueError("request body must be a JSON object")
+            payload = self._read_payload()
             self._send(200, dispatch(service(), self.path, payload))
+        except OverflowError as error:
+            self._send(413, {"error": str(error)})
         except KeyError:
             self._send(404, {"error": "not found"})
         except (EspoError, PolicyError, ValueError, TypeError, json.JSONDecodeError) as error:

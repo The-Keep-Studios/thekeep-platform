@@ -29,7 +29,10 @@ platform_secrets:
   espocrm_admin_password: "CHANGE_ME"
   espocrm_assistant_read_api_key: "CHANGE_ME"
   espocrm_assistant_read_secret_key: ""
+  espocrm_assistant_write_api_key: "CHANGE_ME"
+  espocrm_assistant_write_secret_key: ""
   espocrm_assistant_token: "CHANGE_ME"
+  espocrm_assistant_apply_token: "CHANGE_ME"
 
 # Optional CRM app toggles. Baserow remains the core relationship-management app.
 # platform_optional_apps:

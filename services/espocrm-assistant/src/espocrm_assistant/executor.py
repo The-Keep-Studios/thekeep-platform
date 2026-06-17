@@ -59,7 +59,7 @@ def apply_change(
             client.update(change["entity"], change["recordId"], change["fields"])
             record_id = change["recordId"]
         else:
-            if change["entity"] in {"Lead", "Opportunity"}:
+            if change["entity"] in {"Lead", "Opportunity", "Account", "Contact"}:
                 current = EspoAssistant(client).duplicate_candidates(change["fields"])
                 approved = {
                     (item.get("entity"), item.get("id"))

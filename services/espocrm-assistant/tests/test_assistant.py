@@ -10,7 +10,7 @@ from pathlib import Path
 
 from espocrm_assistant.client import EspoClient
 from espocrm_assistant.executor import apply_change
-from espocrm_assistant.http_server import dispatch
+from espocrm_assistant.http_server import dispatch, dispatch_approval
 from espocrm_assistant.policy import PolicyError, export_csv, prepare_change
 from espocrm_assistant.service import EspoAssistant
 
@@ -148,6 +148,38 @@ class PolicyTests(unittest.TestCase):
                 )
                 self.assertEqual(entity, change["entity"])
 
+    def test_account_and_contact_writes_are_allowlisted(self):
+        account = prepare_change(
+            operation="create",
+            entity="Account",
+            fields={"name": "Acme Studios", "website": "https://acme.example"},
+            source=source("Manual/Ian Found"),
+        )
+        contact = prepare_change(
+            operation="create",
+            entity="Contact",
+            fields={"firstName": "Ari", "lastName": "Example", "accountId": "account-1"},
+            source=source("Personal Network"),
+        )
+        self.assertEqual("Account", account["entity"])
+        self.assertEqual("Contact", contact["entity"])
+
+    def test_account_and_contact_creates_require_identity(self):
+        with self.assertRaisesRegex(PolicyError, "Account creates require"):
+            prepare_change(
+                operation="create",
+                entity="Account",
+                fields={"description": "missing identity"},
+                source=source(),
+            )
+        with self.assertRaisesRegex(PolicyError, "Contact creates require"):
+            prepare_change(
+                operation="create",
+                entity="Contact",
+                fields={"description": "missing identity"},
+                source=source(),
+            )
+
 
 class ServiceTests(unittest.TestCase):
     def test_search_uses_espo_select_array(self):
@@ -171,6 +203,65 @@ class ServiceTests(unittest.TestCase):
         })
         self.assertEqual(len({(item["entity"], item["id"]) for item in found}), len(found))
         self.assertNotIn("secret", found[0])
+
+    def test_prepare_change_checks_account_and_contact_duplicates(self):
+        client = FakeClient()
+        client.records[("Account", "account-1")] = {
+            "id": "account-1",
+            "name": "Acme Studios",
+            "modifiedAt": "2026-06-11 12:00:00",
+        }
+        change = EspoAssistant(client).prepare_change(
+            operation="create",
+            entity="Account",
+            fields={"name": "Acme Studios"},
+            source=source("Manual/Ian Found"),
+        )
+        self.assertEqual([{
+            "entity": "Account",
+            "id": "account-1",
+            "name": "Acme Studios",
+            "matchedOn": "name",
+        }], change["duplicateCandidates"])
+
+    def test_prepare_lead_conversion_returns_opportunity_and_lead_update(self):
+        client = FakeClient()
+        client.records[("Lead", "lead-1")] = {
+            "id": "lead-1",
+            "name": "Platform role",
+            "accountName": "Acme Studios",
+            "description": "Original note",
+            "modifiedAt": "2026-06-11 12:00:00",
+        }
+        changes = EspoAssistant(client).prepare_lead_conversion(
+            lead_id="lead-1",
+            expected_modified_at="2026-06-11 12:00:00",
+            opportunity_fields={"stage": "Prospecting"},
+            source=source("Email Recruiter"),
+            reciprocal_signal="Recruiter requested a call.",
+        )
+        self.assertEqual(["Opportunity", "Lead"], [item["entity"] for item in changes])
+        self.assertEqual("Platform role", changes[0]["fields"]["name"])
+        self.assertEqual("Converted Lead", changes[0]["fields"]["leadSource"])
+        self.assertIn("Originating Espo Lead: lead-1", changes[0]["fields"]["description"])
+        self.assertEqual("Converted", changes[1]["fields"]["status"])
+        self.assertEqual("lead-1", changes[1]["recordId"])
+
+    def test_prepare_lead_conversion_rejects_stale_lead(self):
+        client = FakeClient()
+        client.records[("Lead", "lead-1")] = {
+            "id": "lead-1",
+            "name": "Platform role",
+            "modifiedAt": "newer",
+        }
+        with self.assertRaisesRegex(PolicyError, "precondition"):
+            EspoAssistant(client).prepare_lead_conversion(
+                lead_id="lead-1",
+                expected_modified_at="older",
+                opportunity_fields={"name": "Platform role"},
+                source=source("Email Recruiter"),
+                reciprocal_signal="Recruiter requested a call.",
+            )
 
 
 class HttpDispatchTests(unittest.TestCase):
@@ -199,15 +290,44 @@ class HttpDispatchTests(unittest.TestCase):
                 self.calls.append(("prepare", payload))
                 return {"sha256": "abc"}
 
+            def prepare_lead_conversion(self, **payload):
+                self.calls.append(("lead-conversion", payload))
+                return [{"sha256": "def"}]
+
             def export_csv(self, changes):
                 self.calls.append(("export", changes))
                 return "operation,entity\n"
 
         assistant = Assistant()
         self.assertEqual({"total": 0, "list": []}, dispatch(assistant, "/crm/search", {"entity": "Lead"}))
+        self.assertEqual(
+            [{"sha256": "def"}],
+            dispatch(assistant, "/crm/prepare-lead-conversion", {"lead_id": "lead-1"}),
+        )
         self.assertEqual({"csv": "operation,entity\n"}, dispatch(assistant, "/crm/export-csv", {"changes": []}))
         with self.assertRaises(KeyError):
             dispatch(assistant, "/crm/apply", {})
+
+    def test_approval_dispatch_applies_change_with_separate_path(self):
+        client = FakeClient()
+        change = prepare_change(
+            operation="create",
+            entity="Lead",
+            fields={"name": "Qualified lead"},
+            source=source(),
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            report = dispatch_approval(
+                client,
+                {
+                    "change": change,
+                    "approved_sha256": change["sha256"],
+                    "approved_by": "ian@example.test",
+                },
+                Path(directory) / "audit.jsonl",
+            )
+        self.assertEqual("applied", report["status"])
+        self.assertEqual(["Lead", "Note"], [entity for entity, _ in client.created])
 
 
 class ExecutorTests(unittest.TestCase):

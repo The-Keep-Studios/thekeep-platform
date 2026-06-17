@@ -54,6 +54,15 @@ WRITE_FIELDS = {
         "accountId", "contactsIds", "description", "assignedUserId", "teamsIds",
         "leadSource",
     },
+    "Account": {
+        "name", "website", "emailAddress", "phoneNumber", "type", "industry",
+        "description", "assignedUserId", "teamsIds",
+    },
+    "Contact": {
+        "firstName", "lastName", "name", "emailAddress", "emailAddressData",
+        "phoneNumber", "phoneNumberData", "accountId", "title", "description",
+        "assignedUserId", "teamsIds",
+    },
     "Task": {
         "name", "status", "priority", "dateStart", "dateEnd", "dateStartDate",
         "dateEndDate", "description", "parentType", "parentId", "assignedUserId",
@@ -152,6 +161,14 @@ def prepare_change(
         fields.get(key) for key in ("name", "firstName", "lastName", "emailAddress", "accountName", "website")
     ):
         raise PolicyError("Lead creates require identifying fields")
+    if operation == "create" and entity == "Account" and not any(
+        fields.get(key) for key in ("name", "emailAddress", "website")
+    ):
+        raise PolicyError("Account creates require identifying fields")
+    if operation == "create" and entity == "Contact" and not any(
+        fields.get(key) for key in ("name", "firstName", "lastName", "emailAddress", "phoneNumber")
+    ):
+        raise PolicyError("Contact creates require identifying fields")
     if entity == "Task":
         if operation != "create":
             raise PolicyError("Task updates are not exposed")

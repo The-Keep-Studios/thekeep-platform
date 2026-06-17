@@ -117,7 +117,12 @@
           {{
             (['twenty_pg_database_password', 'twenty_encryption_key', 'twenty_app_secret'] if (platform_optional_twenty_enabled | bool) else []) +
             (['espocrm_db_root_password', 'espocrm_db_password', 'espocrm_admin_password'] if (platform_optional_espocrm_enabled | bool) else []) +
-            (['espocrm_assistant_read_api_key', 'espocrm_assistant_token'] if (platform_optional_espocrm_assistant_enabled | bool) else [])
+            ([
+              'espocrm_assistant_read_api_key',
+              'espocrm_assistant_write_api_key',
+              'espocrm_assistant_token',
+              'espocrm_assistant_apply_token'
+            ] if (platform_optional_espocrm_assistant_enabled | bool) else [])
           }}
       tags: [always]
 

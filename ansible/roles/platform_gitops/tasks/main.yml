@@ -447,7 +447,10 @@
           'stringData': {
             'ESPOCRM_READ_API_KEY': platform_secrets.espocrm_assistant_read_api_key | default(''),
             'ESPOCRM_READ_SECRET_KEY': platform_secrets.espocrm_assistant_read_secret_key | default(''),
-            'ESPOCRM_ASSISTANT_TOKEN': platform_secrets.espocrm_assistant_token | default('')
+            'ESPOCRM_WRITE_API_KEY': platform_secrets.espocrm_assistant_write_api_key | default(''),
+            'ESPOCRM_WRITE_SECRET_KEY': platform_secrets.espocrm_assistant_write_secret_key | default(''),
+            'ESPOCRM_ASSISTANT_TOKEN': platform_secrets.espocrm_assistant_token | default(''),
+            'ESPOCRM_ASSISTANT_APPLY_TOKEN': platform_secrets.espocrm_assistant_apply_token | default('')
           }
         } | to_nice_yaml
       }}
