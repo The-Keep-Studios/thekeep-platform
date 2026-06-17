@@ -2,7 +2,7 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/.idea/resolve-ansible-boilerplate.iml" filepath="$PROJECT_DIR$/.idea/resolve-ansible-boilerplate.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/thekeep-platform.iml" filepath="$PROJECT_DIR$/.idea/thekeep-platform.iml" />
     </modules>
   </component>
 </project>
