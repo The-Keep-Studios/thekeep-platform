@@ -1,0 +1,60 @@
+name: Quality Checks
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/quality.yml"
+      - ".gitignore"
+      - "**/*.md"
+      - "**/*.sh"
+      - "**/*.yaml"
+      - "**/*.yml"
+      - "README.md"
+      - "ansible.cfg"
+      - "ansible/**"
+      - "kubernetes/**"
+      - "scripts/**"
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/quality.yml"
+      - ".gitignore"
+      - "**/*.md"
+      - "**/*.sh"
+      - "**/*.yaml"
+      - "**/*.yml"
+      - "README.md"
+      - "ansible.cfg"
+      - "ansible/**"
+      - "kubernetes/**"
+      - "scripts/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    name: Quality
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Ansible
+        run: python -m pip install ansible-core==2.16.3
+
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v4
+        with:
+          version: v1.33.0
+
+      - name: Run quality checks
+        run: scripts/test-quality.sh
