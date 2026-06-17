@@ -13,3 +13,4 @@ ansible/production_vars.yml
 __pycache__/
 .venv/
 *.egg-info/
+/.junie/
