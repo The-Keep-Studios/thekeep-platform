@@ -1,5 +1,9 @@
 name: EspoCRM Assistant Image
 
+# This workflow validates and packages the Kubernetes-deployed assistant image.
+# It is not a local development prerequisite. Non-GitHub installs can build or
+# mirror the image and update the Kubernetes manifest to that registry/tag.
+
 on:
   pull_request:
     paths:

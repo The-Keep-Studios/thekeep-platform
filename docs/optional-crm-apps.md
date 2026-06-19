@@ -140,6 +140,62 @@ platform_secrets:
   espocrm_admin_password: "CHANGE_ME"
 ```
 
+### EspoCRM Assistant
+
+The EspoCRM assistant is disabled by default and requires EspoCRM itself to be
+enabled. Turning on `platform_optional_apps.espocrm_assistant.enabled` does not
+turn on `platform_optional_apps.espocrm.enabled`; the production playbook fails
+early if the assistant is enabled without EspoCRM.
+
+When enabled, the assistant runs in the `espocrm` namespace as an internal
+Kubernetes service. It exposes a streamable HTTP MCP endpoint at `/mcp` for the
+future OAuth-capable MCP gateway, and a separate approval service on port
+`8090`. Neither endpoint should be internet-exposed directly.
+
+Required GitOps settings:
+
+```yaml
+platform_optional_apps:
+  espocrm:
+    enabled: true
+  espocrm_assistant:
+    enabled: true
+```
+
+Required assistant secrets:
+
+```yaml
+platform_secrets:
+  espocrm_assistant_read_api_key: "CHANGE_ME"
+  espocrm_assistant_read_secret_key: ""
+  espocrm_assistant_write_api_key: "CHANGE_ME"
+  espocrm_assistant_write_secret_key: ""
+  espocrm_assistant_token: "CHANGE_ME"
+  espocrm_assistant_apply_token: "CHANGE_ME"
+```
+
+Use separate EspoCRM API users for read and write access. The read API user is
+used by assistant-visible MCP tools. The write API user is used only by the
+human-approved apply endpoint. The `*_secret_key` values are optional HMAC
+secrets if HMAC is enabled for the corresponding EspoCRM API user. The
+assistant token protects internal non-mutating JSON helper routes. The apply
+token protects `/approval/apply-change` and should be shared only with the
+approved executor path.
+
+The assistant image workflow in `.github/workflows/espocrm-assistant-image.yml`
+is CI and package publication for this repository: pull requests run tests,
+entrypoint import checks, manifest rendering, and image build validation; pushes
+to `main` or tags publish to GHCR. That creates a default image distribution
+path, not a runtime requirement that the cluster use GitHub Actions. Operators
+who do not want GHCR in the deployment path should build or mirror the image and
+update `kubernetes/apps/espocrm-assistant/deployment.yaml` to the chosen
+registry/tag or digest.
+
+For local service commands, streamable HTTP configuration, and approval endpoint
+examples, see `services/espocrm-assistant/README.md`. For the build-vs-wrap
+decision and retained MCP research summary, see
+`docs/espocrm-mcp-evaluation.md`.
+
 If external HTTPS validation is enabled, include the enabled host in
 `direct_http_urls` so the direct-origin exposure check covers it too.
 

@@ -264,7 +264,7 @@
     - name: twenty
       enabled: "{{ ((platform_optional_apps | default({})).twenty | default({})).enabled | default(false) | bool }}"
     - name: espocrm
-      enabled: "{{ (((platform_optional_apps | default({})).espocrm | default({})).enabled | default(false) | bool) or (((platform_optional_apps | default({})).espocrm_assistant | default({})).enabled | default(false) | bool) }}"
+      enabled: "{{ ((platform_optional_apps | default({})).espocrm | default({})).enabled | default(false) | bool }}"
   when: item.enabled | bool
   changed_when: >
     optional_namespace_apply.stdout is defined and

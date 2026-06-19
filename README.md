@@ -409,6 +409,37 @@ kubectl annotate application platform-root -n argocd \
   argocd.argoproj.io/refresh=hard --overwrite
 ```
 
+### EspoCRM Assistant
+
+The EspoCRM assistant is an optional internal Kubernetes service, not a
+standalone desktop workflow. It is disabled by default and requires
+`platform_optional_apps.espocrm.enabled: true`; enabling
+`platform_optional_apps.espocrm_assistant.enabled` does not enable EspoCRM for
+you. The production playbook fails early if that dependency is missing.
+
+Configure it in ignored `ansible/production_vars.yml` with separate
+least-privilege EspoCRM API users:
+
+- `espocrm_assistant_read_api_key` and optional `espocrm_assistant_read_secret_key` for assistant-visible MCP tools.
+- `espocrm_assistant_write_api_key` and optional `espocrm_assistant_write_secret_key` for the approval/apply endpoint only.
+- `espocrm_assistant_token` for internal non-mutating helper routes.
+- `espocrm_assistant_apply_token` for `/approval/apply-change`.
+
+The deployed MCP endpoint is internal streamable HTTP at `/mcp`; it is intended
+to sit behind the OAuth-capable MCP gateway rather than be exposed directly. The
+separate approval service applies one human-approved change set at a time with
+the write API user and audit logging.
+
+The GitHub workflow for this service validates tests, entrypoints, manifest
+rendering, and image construction, then publishes the default GHCR image on
+`main` or tag pushes. It is packaging support for the Kubernetes deployment. If
+GHCR is not acceptable for an environment, build or mirror the image and point
+the Kubernetes manifest at that registry tag or digest.
+
+Full operator configuration lives in `docs/optional-crm-apps.md`. Local service
+commands live in `services/espocrm-assistant/README.md`. The retained
+build-vs-wrap MCP evaluation lives in `docs/espocrm-mcp-evaluation.md`.
+
 ### OIDC Notes
 
 Authentik is the intended internal identity hub. Configure Google once in Authentik upstream.
@@ -528,6 +559,9 @@ This is the backlog for moving from production-like to high availability:
 - GitOps apps/root: `kubernetes/gitops/*`
 - Leantime backup CronJob: `kubernetes/apps/leantime/backup-cronjob.yaml`
 - Leantime UI/MCP route contract: `docs/leantime-mcp-routing.md`
+- Optional CRM and EspoCRM assistant configuration: `docs/optional-crm-apps.md`
+- EspoCRM assistant service usage: `services/espocrm-assistant/README.md`
+- EspoCRM MCP evaluation: `docs/espocrm-mcp-evaluation.md`
 - Leantime UI/MCP route probe: `scripts/check-leantime-routing.sh`
 - Runtime env template: `scripts/production.env.example`
 - OIDC reconcile helper: `scripts/reconcile-oidc.sh`
