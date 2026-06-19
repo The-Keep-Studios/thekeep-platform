@@ -129,6 +129,7 @@ Target for full production:
 - Argo CD continuously reconciles to Git state.
 - Runtime secrets come from Kubernetes Secrets today and should evolve to external or encrypted secret management.
 - Deployments should assume eventual multi-node scheduling, even if the current cluster is single-node.
+- For the repeatable app-support shape, see `docs/app-support-contract.md`.
 
 ### Developer Rules Of Thumb
 
@@ -526,6 +527,7 @@ This is the backlog for moving from production-like to high availability:
 - Argo platform install: `kubernetes/platform/argocd/*`
 - Cloudflare Tunnel edge deployment: `kubernetes/platform/cloudflared/*`
 - GitOps apps/root: `kubernetes/gitops/*`
+- App support contract: `docs/app-support-contract.md`
 - Leantime backup CronJob: `kubernetes/apps/leantime/backup-cronjob.yaml`
 - Leantime UI/MCP route contract: `docs/leantime-mcp-routing.md`
 - Leantime UI/MCP route probe: `scripts/check-leantime-routing.sh`
