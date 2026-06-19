@@ -7,6 +7,8 @@ cd "${PROJECT_ROOT}"
 
 # shellcheck source=scripts/dev-preflight.sh
 source "${SCRIPT_DIR}/dev-preflight.sh"
+# shellcheck source=scripts/dev-app-targets.sh
+source "${SCRIPT_DIR}/dev-app-targets.sh"
 
 CLUSTER_NAME="${K3D_CLUSTER_NAME:-thekeep-dev}"
 PROBE_IMAGE="${DEV_PROBE_IMAGE:-curlimages/curl:8.8.0}"
@@ -329,6 +331,7 @@ smoke_espocrm() {
 
 run_target() {
   local target="$1"
+  local concrete_target
 
   case "${target}" in
     wisemapping)
@@ -362,32 +365,29 @@ run_target() {
       fi
       ;;
     optional-crm|crm-bakeoff)
-      run_target twenty
-      run_target espocrm
+      while IFS= read -r concrete_target; do
+        run_target "${concrete_target}"
+      done < <(dev_app_expand_target "${target}")
       ;;
     platform)
-      run_target wisemapping
-      run_target leantime
-      run_target baserow
+      while IFS= read -r concrete_target; do
+        run_target "${concrete_target}"
+      done < <(dev_app_expand_target "${target}")
       ;;
     *)
       echo "Unknown dev smoke target: ${target}" >&2
-      echo "Usage: scripts/dev-smoke.sh [wisemapping|leantime|baserow|twenty|espocrm|optional-crm|crm-bakeoff|platform]..." >&2
+      dev_app_print_usage "scripts/dev-smoke.sh" "..."
       return 2
       ;;
   esac
 }
 
 validate_target() {
-  case "$1" in
-    wisemapping|leantime|baserow|twenty|espocrm|optional-crm|crm-bakeoff|platform)
-      ;;
-    *)
-      echo "Unknown dev smoke target: $1" >&2
-      echo "Usage: scripts/dev-smoke.sh [wisemapping|leantime|baserow|twenty|espocrm|optional-crm|crm-bakeoff|platform]..." >&2
-      return 2
-      ;;
-  esac
+  if ! dev_app_is_target "$1"; then
+    echo "Unknown dev smoke target: $1" >&2
+    dev_app_print_usage "scripts/dev-smoke.sh" "..."
+    return 2
+  fi
 }
 
 main() {

@@ -7,6 +7,8 @@ cd "${PROJECT_ROOT}"
 
 # shellcheck source=scripts/dev-preflight.sh
 source "${SCRIPT_DIR}/dev-preflight.sh"
+# shellcheck source=scripts/dev-app-targets.sh
+source "${SCRIPT_DIR}/dev-app-targets.sh"
 
 CLUSTER_NAME="${K3D_CLUSTER_NAME:-thekeep-dev}"
 OPEN_BROWSER="${DEV_OBSERVE_OPEN:-true}"
@@ -55,68 +57,6 @@ ensure_context() {
   fi
 
   dev_preflight_check_kubernetes_node_pressure
-}
-
-app_config() {
-  local target="$1"
-
-  case "${target}" in
-    wisemapping)
-      APP_NAMESPACE="wisemapping"
-      APP_SERVICE="wisemapping"
-      APP_DEPLOYMENT="wisemapping"
-      APP_PORT="${WISEMAPPING_OBSERVE_PORT:-18081}"
-      APP_HOST="${WISEMAPPING_PROBE_HOST:-mindmaps.thekeepstudios.com}"
-      APP_PROBE_PATH="/api/restful/app/config"
-      APP_PROBE_PATTERN="apiBaseUrl|uiBaseUrl"
-      APP_CONFIG_KIND="wisemapping"
-      ;;
-    leantime)
-      APP_NAMESPACE="default"
-      APP_SERVICE="leantime"
-      APP_DEPLOYMENT="leantime"
-      APP_PORT="${LEANTIME_OBSERVE_PORT:-18080}"
-      APP_HOST="${LEANTIME_PROBE_HOST:-projects.thekeepstudios.com}"
-      APP_PROBE_PATH="/auth/login"
-      APP_PROBE_PATTERN="leantime|login|email|password|install|redirecting"
-      APP_CONFIG_KIND="leantime"
-      ;;
-    baserow)
-      APP_NAMESPACE="baserow"
-      APP_SERVICE="baserow"
-      APP_DEPLOYMENT="baserow"
-      APP_PORT="${BASEROW_OBSERVE_PORT:-18082}"
-      APP_HOST="${BASEROW_PROBE_HOST:-baserow.thekeepstudios.com}"
-      APP_PROBE_PATH="/"
-      APP_PROBE_PATTERN="login|sign|create account"
-      APP_CONFIG_KIND="baserow"
-      ;;
-    twenty)
-      APP_NAMESPACE="twenty"
-      APP_SERVICE="twenty"
-      APP_DEPLOYMENT="twenty-server"
-      APP_PORT="${TWENTY_OBSERVE_PORT:-18083}"
-      APP_HOST="${TWENTY_PROBE_HOST:-twenty.thekeepstudios.com}"
-      APP_PROBE_PATH="/"
-      APP_PROBE_PATTERN="twenty|login|sign|workspace"
-      APP_CONFIG_KIND="twenty"
-      ;;
-    espocrm)
-      APP_NAMESPACE="espocrm"
-      APP_SERVICE="espocrm"
-      APP_DEPLOYMENT="espocrm"
-      APP_PORT="${ESPOCRM_OBSERVE_PORT:-18084}"
-      APP_HOST="${ESPOCRM_PROBE_HOST:-espocrm.thekeepstudios.com}"
-      APP_PROBE_PATH="/"
-      APP_PROBE_PATTERN="espocrm|login|username|password"
-      APP_CONFIG_KIND="espocrm"
-      ;;
-    *)
-      echo "Unknown dev observe target: ${target}" >&2
-      echo "Usage: scripts/dev-observe.sh [wisemapping|leantime|baserow|twenty|espocrm|optional-crm|crm-bakeoff|platform]" >&2
-      return 2
-      ;;
-  esac
 }
 
 patch_local_config() {
@@ -281,7 +221,7 @@ observe_one() {
   local human_url
   local browser_bin
 
-  app_config "${target}"
+  dev_app_observe_config "${target}"
   mkdir -p "${artifact_dir}"
 
   kubectl get service "${APP_SERVICE}" -n "${APP_NAMESPACE}" >/dev/null
@@ -344,48 +284,27 @@ EOF
 main() {
   local targets=("$@")
   local target
+  local concrete_target
 
   if [ "${#targets[@]}" -eq 0 ]; then
     targets=(platform)
   fi
 
   for target in "${targets[@]}"; do
-    case "${target}" in
-      platform|wisemapping|leantime|baserow)
-        ;;
-      twenty|espocrm|optional-crm|crm-bakeoff)
-        ;;
-      *)
-        echo "Unknown dev observe target: ${target}" >&2
-        echo "Usage: scripts/dev-observe.sh [wisemapping|leantime|baserow|twenty|espocrm|optional-crm|crm-bakeoff|platform]" >&2
-        exit 2
-        ;;
-    esac
+    if ! dev_app_is_target "${target}"; then
+      echo "Unknown dev observe target: ${target}" >&2
+      dev_app_print_usage "scripts/dev-observe.sh"
+      exit 2
+    fi
   done
 
   ensure_context
   trap cleanup EXIT INT TERM
 
   for target in "${targets[@]}"; do
-    case "${target}" in
-      platform)
-        observe_one wisemapping
-        observe_one leantime
-        observe_one baserow
-        ;;
-      optional-crm|crm-bakeoff)
-        observe_one twenty
-        observe_one espocrm
-        ;;
-      wisemapping|leantime|baserow|twenty|espocrm)
-        observe_one "${target}"
-        ;;
-      *)
-        echo "Unknown dev observe target: ${target}" >&2
-        echo "Usage: scripts/dev-observe.sh [wisemapping|leantime|baserow|twenty|espocrm|optional-crm|crm-bakeoff|platform]" >&2
-        exit 2
-        ;;
-    esac
+    while IFS= read -r concrete_target; do
+      observe_one "${concrete_target}"
+    done < <(dev_app_expand_target "${target}")
   done
 
   echo ""
