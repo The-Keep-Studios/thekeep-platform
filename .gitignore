@@ -11,3 +11,6 @@ ansible/production_vars.yml
 /.artifacts/
 /.ai/
 /.junie/
+__pycache__/
+.venv/
+*.egg-info/

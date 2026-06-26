@@ -174,16 +174,64 @@ Target for full production:
 - Human and AI contributors should challenge requests when the proposed implementation does not match the actual goal or creates avoidable operational burden.
 - Prefer reviewable files, dry runs, and copy/paste commands over hidden automation for one-time operations.
 
+### TODO Tracking Standard
+
+Use GitHub as the durable TODO system. Do not rely on private chat memory, local notes, unchecked code comments, or stale PR prose for work that must survive a handoff.
+
+Every non-trivial TODO must be represented in one of these forms:
+
+- GitHub issue: durable backlog item, follow-up, blocker, or acceptance criterion not finished by the current PR.
+- PR TODO ledger comment: short-lived checklist for the PR's remaining review, validation, and merge-readiness work.
+- Issue TODO ledger comment: current decomposition of a larger issue into ordered, owner-visible next actions.
+- Inline code TODO: allowed only when it points to a GitHub issue number and describes a concrete code-local follow-up.
+
+Use this format for TODO ledger comments:
+
+```markdown
+## TODO Ledger
+
+- [ ] Owner: <human|agent|PM> | Type: <blocker|follow-up|validation|decision> | Ref: #<issue-or-pr> | Due: <before-merge|next-sprint|later>
+      Action: <one concrete next action>
+      Evidence: <command, review, PR, issue, or production proof that will close it>
+```
+
+Rules:
+
+- A PR may use `Closes #...` only when its merged diff satisfies every acceptance criterion for that issue.
+- If a PR is useful but partial, use `Refs #...` and add or link follow-up issues before marking the PR ready for review.
+- Broad issues should keep one current TODO ledger comment. Update that comment instead of scattering status across several comments.
+- Human-driven tasks must be labeled as human-owned in the ledger; agents should not silently convert them into code changes.
+- Before ending a work session, update the relevant PR or issue ledger with what remains, who owns it, and what evidence is needed next.
+
 ### Before Merging
 
 For infrastructure changes, confirm the relevant items before merging:
 
+- Repository quality checks pass with `scripts/test-quality.sh`.
 - Static checks pass, such as `scripts/test-iac-static.sh` when it applies.
 - Ansible syntax or playbook checks were run for changed playbooks and roles.
 - Local k3d smoke or observation checks were run for app changes when practical.
 - GitOps manifests do not accidentally target a feature branch unless that is intentional for testing.
 - No secrets, tokens, passwords, kubeconfigs, or private keys are committed.
 - Rollout, validation, and rollback steps are clear enough for another engineer to follow.
+
+### Quality Checks
+
+Run the repo-level quality gate before opening or updating infrastructure PRs:
+
+```bash
+scripts/test-quality.sh
+```
+
+The current tracked surfaces are shell scripts, Ansible playbooks and roles, Kubernetes YAML, docs, and this GitHub Actions workflow. There are no tracked Python services or container build files on `main` yet, so those checks stay deferred until those surfaces exist on the branch being reviewed.
+
+The first enforced baseline reuses `scripts/test-iac-static.sh`, which already covers Git whitespace, shell syntax, Kustomize rendering, Ansible syntax, and focused EspoCRM validation. Optional stricter tools are wired behind `QUALITY_STRICT=true` and run only when installed:
+
+```bash
+QUALITY_STRICT=true scripts/test-quality.sh
+```
+
+Use the strict mode to evaluate `shellcheck`, `shfmt`, `actionlint`, `yamllint`, `ruff`, and `hadolint` without turning noisy or branch-specific tools into a default PR blocker too early.
 
 ## Operations Runbook
 
@@ -549,6 +597,7 @@ This is the backlog for moving from production-like to high availability:
 - Cloudflare Tunnel edge deployment: `kubernetes/platform/cloudflared/*`
 - GitOps apps/root: `kubernetes/gitops/*`
 - Leantime backup CronJob: `kubernetes/apps/leantime/backup-cronjob.yaml`
+- Repository quality gate: `scripts/test-quality.sh`
 - Leantime UI/MCP route contract: `docs/leantime-mcp-routing.md`
 - Leantime UI/MCP route probe: `scripts/check-leantime-routing.sh`
 - Runtime env template: `scripts/production.env.example`
