@@ -1,0 +1,181 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: espocrm-assistant
+  namespace: espocrm
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: espocrm-assistant
+  template:
+    metadata:
+      labels:
+        app: espocrm-assistant
+    spec:
+      securityContext:
+        fsGroup: 65532
+      containers:
+      - name: mcp
+        image: ghcr.io/the-keep-studios/espocrm-assistant@sha256:aea7326a6df729feb94595740040aba184274d0f897fdd4ffcc5d8408df3e585
+        imagePullPolicy: IfNotPresent
+        command:
+        - thekeep-espocrm-mcp-http
+        env:
+        - name: ESPOCRM_URL
+          value: http://espocrm.espocrm.svc.cluster.local
+        - name: ESPOCRM_ALLOW_HTTP
+          value: "1"
+        - name: ESPOCRM_READ_AUTH_METHOD
+          value: apikey
+        - name: ESPOCRM_READ_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: espocrm-assistant-secrets
+              key: ESPOCRM_READ_API_KEY
+        - name: ESPOCRM_READ_SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: espocrm-assistant-secrets
+              key: ESPOCRM_READ_SECRET_KEY
+              optional: true
+        - name: ESPOCRM_MCP_HOST
+          value: 0.0.0.0
+        - name: ESPOCRM_MCP_PORT
+          value: "8080"
+        - name: ESPOCRM_MCP_PATH
+          value: /mcp
+        - name: ESPOCRM_MCP_STATELESS_HTTP
+          value: "1"
+        ports:
+        - name: mcp
+          containerPort: 8080
+        readinessProbe:
+          tcpSocket:
+            port: mcp
+          periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 6
+        livenessProbe:
+          tcpSocket:
+            port: mcp
+          periodSeconds: 30
+          timeoutSeconds: 3
+          failureThreshold: 4
+        resources:
+          requests:
+            cpu: 25m
+            memory: 96Mi
+          limits:
+            cpu: 250m
+            memory: 256Mi
+      - name: approval
+        image: ghcr.io/the-keep-studios/espocrm-assistant@sha256:aea7326a6df729feb94595740040aba184274d0f897fdd4ffcc5d8408df3e585
+        imagePullPolicy: IfNotPresent
+        command:
+        - thekeep-espocrm-http
+        env:
+        - name: ESPOCRM_URL
+          value: http://espocrm.espocrm.svc.cluster.local
+        - name: ESPOCRM_ALLOW_HTTP
+          value: "1"
+        - name: ESPOCRM_READ_AUTH_METHOD
+          value: apikey
+        - name: ESPOCRM_READ_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: espocrm-assistant-secrets
+              key: ESPOCRM_READ_API_KEY
+        - name: ESPOCRM_READ_SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: espocrm-assistant-secrets
+              key: ESPOCRM_READ_SECRET_KEY
+              optional: true
+        - name: ESPOCRM_WRITE_AUTH_METHOD
+          value: apikey
+        - name: ESPOCRM_WRITE_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: espocrm-assistant-secrets
+              key: ESPOCRM_WRITE_API_KEY
+        - name: ESPOCRM_WRITE_SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: espocrm-assistant-secrets
+              key: ESPOCRM_WRITE_SECRET_KEY
+              optional: true
+        - name: ESPOCRM_ASSISTANT_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: espocrm-assistant-secrets
+              key: ESPOCRM_ASSISTANT_TOKEN
+        - name: ESPOCRM_ASSISTANT_APPLY_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: espocrm-assistant-secrets
+              key: ESPOCRM_ASSISTANT_APPLY_TOKEN
+        - name: ESPOCRM_ASSISTANT_PORT
+          value: "8090"
+        - name: ESPOCRM_ASSISTANT_AUDIT_LOG
+          value: /var/lib/thekeep/espocrm-assistant/audit.jsonl
+        ports:
+        - name: approval
+          containerPort: 8090
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: approval
+          periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 6
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: approval
+          periodSeconds: 30
+          timeoutSeconds: 3
+          failureThreshold: 4
+        volumeMounts:
+        - name: audit-log
+          mountPath: /var/lib/thekeep/espocrm-assistant
+        resources:
+          requests:
+            cpu: 25m
+            memory: 96Mi
+          limits:
+            cpu: 250m
+            memory: 256Mi
+      volumes:
+      - name: audit-log
+        persistentVolumeClaim:
+          claimName: espocrm-assistant-audit
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: espocrm-assistant
+  namespace: espocrm
+spec:
+  type: ClusterIP
+  selector:
+    app: espocrm-assistant
+  ports:
+  - name: mcp
+    port: 8080
+    targetPort: mcp
+  - name: approval
+    port: 8090
+    targetPort: approval
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: espocrm-assistant-audit
+  namespace: espocrm
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi

@@ -598,6 +598,7 @@ This is the backlog for moving from production-like to high availability:
 - Cloudflare Tunnel edge deployment: `kubernetes/platform/cloudflared/*`
 - GitOps apps/root: `kubernetes/gitops/*`
 - App support contract: `docs/app-support-contract.md`
+- Optional CRM and EspoCRM assistant operator config: `docs/optional-crm-apps.md`
 - Leantime backup CronJob: `kubernetes/apps/leantime/backup-cronjob.yaml`
 - Repository quality gate: `scripts/test-quality.sh`
 - Leantime UI/MCP route contract: `docs/leantime-mcp-routing.md`
