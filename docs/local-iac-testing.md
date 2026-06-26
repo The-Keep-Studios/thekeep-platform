@@ -18,6 +18,16 @@ The local path has three layers:
   requires at least 80 GiB and 8% free on the repo filesystem.
 - Optional: `kubeconform` or `kubeval` for stricter rendered manifest validation.
 
+Check the intended path before running it:
+
+```bash
+scripts/check-local-prereqs.sh static
+scripts/check-local-prereqs.sh sandbox
+```
+
+`static` requires Git, Bash, kubectl, and Ansible. `sandbox` additionally
+requires a working Docker daemon and k3d. The checker is read-only.
+
 ## Static Checks
 
 Run:
@@ -94,6 +104,9 @@ cp ansible/dev_vars.yml.example ansible/dev_vars.yml
 ```
 
 `ansible/dev_vars.yml` is ignored by Git.
+
+This file documents supported environment overrides. Prefer it over adding
+another `.env` or Compose configuration path.
 
 ## Disposable k3s Cluster
 
@@ -330,6 +343,10 @@ DEV_OBSERVE_PATCH_CONFIG=false scripts/dev-observe.sh wisemapping
 
 This local path does not replace production validation.
 
+The k3d path is the current sandbox/demo setup for reviewers. It uses
+deterministic development-only secrets, but it is not the planned public demo
+experience and must not use production exports.
+
 It does not test:
 
 - Cloudflare Tunnel.
@@ -340,3 +357,12 @@ It does not test:
 - Production backup and restore gates.
 
 Use it to catch render errors, startup failures, and service-level smoke test failures before pushing a branch to Argo CD.
+
+Common failures:
+
+- missing command: install the named prerequisite and rerun the checker;
+- Docker unavailable: make `docker info` work without sudo;
+- disk/pressure failure: free space, then recreate the disposable cluster;
+- image pull/network failure: retry after registry/network recovery;
+- port conflict during observation: use the documented `*_OBSERVE_PORT`
+  override.

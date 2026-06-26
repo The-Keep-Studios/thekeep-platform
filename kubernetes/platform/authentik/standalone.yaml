@@ -435,6 +435,16 @@ spec:
             name: authentik
             port:
               number: 80
+  - host: crm.thekeepstudios.com
+    http:
+      paths:
+      - path: /outpost.goauthentik.io
+        pathType: Prefix
+        backend:
+          service:
+            name: authentik
+            port:
+              number: 80
   - host: espocrm.thekeepstudios.com
     http:
       paths:

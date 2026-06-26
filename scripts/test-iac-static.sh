@@ -38,6 +38,12 @@ while IFS= read -r script; do
   bash -n "${script}"
 done < <(find scripts -maxdepth 1 -type f -name "*.sh" | sort)
 
+log "Local prerequisite checker tests"
+scripts/test-local-prereqs.sh
+
+log "Synthetic demo data checks"
+scripts/test-demo-data.sh
+
 log "Kustomize render check"
 while IFS= read -r kustomization; do
   dir="$(dirname "${kustomization}")"
@@ -63,6 +69,13 @@ grep -q "name: leantime-root-ingress" "${leantime_render}"
 grep -q "pathType: Exact" "${leantime_render}"
 grep -q "replacement: https://projects.thekeepstudios.com/dashboard/home" "${leantime_render}"
 grep -q "default-leantime-root-ui-redirect@kubernetescrd" "${leantime_render}"
+
+log "Baserow CRM app domain check"
+baserow_render="${tmp_dir}/baserow-crm-domain.yaml"
+kubectl kustomize kubernetes/apps/baserow > "${baserow_render}"
+grep -q "name: BASEROW_BUILDER_DOMAINS" "${baserow_render}"
+grep -q "value: crm.thekeepstudios.com" "${baserow_render}"
+grep -q "host: crm.thekeepstudios.com" "${baserow_render}"
 
 log "Ansible syntax check"
 inventory="ansible/inventory.production.ini"
