@@ -140,8 +140,70 @@ platform_secrets:
   espocrm_admin_password: "CHANGE_ME"
 ```
 
-If external HTTPS validation is enabled, include the enabled host in
-`direct_http_urls` so the direct-origin exposure check covers it too.
+### EspoCRM Assistant
+
+The EspoCRM assistant is disabled by default and requires EspoCRM itself to be
+enabled. Turning on `platform_optional_apps.espocrm_assistant.enabled` does not
+turn on `platform_optional_apps.espocrm.enabled`; the production playbook fails
+early if the assistant is enabled without EspoCRM.
+
+When enabled, the assistant runs in the `espocrm` namespace as an internal
+Kubernetes service. It exposes a streamable HTTP MCP endpoint at `/mcp` for the
+future OAuth-capable MCP gateway, and a separate approval service on port
+`8090`. Neither endpoint should be internet-exposed directly.
+
+Required GitOps settings:
+
+```yaml
+platform_optional_apps:
+  espocrm:
+    enabled: true
+  espocrm_assistant:
+    enabled: true
+```
+
+Required assistant secrets:
+
+```yaml
+platform_secrets:
+  espocrm_assistant_read_api_key: "CHANGE_ME"
+  espocrm_assistant_read_secret_key: ""
+  espocrm_assistant_write_api_key: "CHANGE_ME"
+  espocrm_assistant_write_secret_key: ""
+  espocrm_assistant_token: "CHANGE_ME"
+  espocrm_assistant_apply_token: "CHANGE_ME"
+```
+
+Use separate EspoCRM API users for read and write access. The read API user is
+used by assistant-visible MCP tools. The write API user is used only by the
+human-approved apply endpoint. The `*_secret_key` values are optional HMAC
+secrets if HMAC is enabled for the corresponding EspoCRM API user. The
+assistant token protects internal non-mutating JSON helper routes. The apply
+token protects `/approval/apply-change` and should be shared only with the
+approved executor path.
+
+The assistant source, tests, Dockerfile, release workflow, and service-specific
+developer documentation live in the dedicated service repository:
+`https://github.com/The-Keep-Studios/espocrm-assistant`.
+
+TKP consumes the published service image by immutable digest:
+
+```text
+ghcr.io/the-keep-studios/espocrm-assistant@sha256:aea7326a6df729feb94595740040aba184274d0f897fdd4ffcc5d8408df3e585
+```
+
+That digest was resolved from public tag `sha-7235661`, built from service
+commit `72356613fccb406af4d7511e45af68cb7acedf0f`. Future assistant service
+releases should update only the digest and any changed operator contract in TKP.
+Do not reintroduce the service source, tests, package metadata, Dockerfile, or
+service release workflow into this repository.
+
+For local service commands, streamable HTTP configuration, approval endpoint
+examples, and the build-vs-wrap MCP evaluation, see the service repository.
+
+If external HTTPS validation is enabled, include the enabled public CRM host in
+`direct_http_urls` so the direct-origin exposure check covers it too. The
+EspoCRM assistant has no public hostname and should not be added here.
 
 ```yaml
 direct_http_urls:

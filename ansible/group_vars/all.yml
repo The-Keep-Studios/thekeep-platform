@@ -65,6 +65,8 @@ platform_optional_apps:
     enabled: false
   espocrm:
     enabled: false
+  espocrm_assistant:
+    enabled: false
 
 platform_validation_argo_app_status_retries: 60
 platform_validation_argo_app_status_delay: 10

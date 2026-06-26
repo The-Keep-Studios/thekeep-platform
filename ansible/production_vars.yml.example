@@ -27,6 +27,19 @@ platform_secrets:
   espocrm_db_root_password: "CHANGE_ME"
   espocrm_db_password: "CHANGE_ME"
   espocrm_admin_password: "CHANGE_ME"
+  # EspoCRM assistant requires platform_optional_apps.espocrm.enabled: true.
+  # Use a least-privilege read API user for assistant-visible MCP tools.
+  espocrm_assistant_read_api_key: "CHANGE_ME"
+  # Optional HMAC secret for the read API user, if enabled in EspoCRM.
+  espocrm_assistant_read_secret_key: ""
+  # Use a separate write API user for the approval/apply endpoint only.
+  espocrm_assistant_write_api_key: "CHANGE_ME"
+  # Optional HMAC secret for the write API user, if enabled in EspoCRM.
+  espocrm_assistant_write_secret_key: ""
+  # Protects internal non-mutating JSON helper routes.
+  espocrm_assistant_token: "CHANGE_ME"
+  # Protects /approval/apply-change; share only with the approved executor path.
+  espocrm_assistant_apply_token: "CHANGE_ME"
 
 # Optional CRM app toggles. Baserow remains the core relationship-management app.
 # platform_optional_apps:
@@ -40,6 +53,9 @@ platform_secrets:
 #     email_server_allowed_address_list:
 #       - "imap.example.com:993"
 #       - "smtp.example.com:587"
+#   espocrm_assistant:
+#     # Requires espocrm.enabled: true. The assistant does not enable EspoCRM.
+#     enabled: false
 
 # Optional: enable these only when gitops_repo_private is true.
 # gitops_repo_ssh_private_key_path: "/path/to/argocd-readonly-key"
