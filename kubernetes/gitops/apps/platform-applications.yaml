@@ -7,7 +7,7 @@ spec:
   project: platform
   source:
     repoURL: "https://github.com/The-Keep-Studios/thekeep-platform.git"
-    targetRevision: "main"
+    targetRevision: "v0.1.0-alpha.1"
     path: kubernetes/platform/cloudflared
   destination:
     server: https://kubernetes.default.svc
@@ -28,7 +28,7 @@ spec:
   project: platform
   source:
     repoURL: "https://github.com/The-Keep-Studios/thekeep-platform.git"
-    targetRevision: "main"
+    targetRevision: "v0.1.0-alpha.1"
     path: kubernetes/platform/authentik
   destination:
     server: https://kubernetes.default.svc
@@ -50,7 +50,7 @@ spec:
   project: platform
   source:
     repoURL: "https://github.com/The-Keep-Studios/thekeep-platform.git"
-    targetRevision: "main"
+    targetRevision: "v0.1.0-alpha.1"
     path: kubernetes/apps/leantime
   destination:
     server: https://kubernetes.default.svc
@@ -72,7 +72,7 @@ spec:
   project: platform
   source:
     repoURL: "https://github.com/The-Keep-Studios/thekeep-platform.git"
-    targetRevision: "main"
+    targetRevision: "v0.1.0-alpha.1"
     path: kubernetes/apps/wisemapping
   destination:
     server: https://kubernetes.default.svc
@@ -94,7 +94,7 @@ spec:
   project: platform
   source:
     repoURL: "https://github.com/The-Keep-Studios/thekeep-platform.git"
-    targetRevision: "main"
+    targetRevision: "v0.1.0-alpha.1"
     path: kubernetes/apps/baserow
   destination:
     server: https://kubernetes.default.svc
@@ -123,10 +123,10 @@ spec:
       valueFiles:
       - $values/kubernetes/platform/monitoring/kube-prometheus-stack.values.yaml
   - repoURL: "https://github.com/The-Keep-Studios/thekeep-platform.git"
-    targetRevision: "main"
+    targetRevision: "v0.1.0-alpha.1"
     ref: values
   - repoURL: "https://github.com/The-Keep-Studios/thekeep-platform.git"
-    targetRevision: "main"
+    targetRevision: "v0.1.0-alpha.1"
     path: kubernetes/platform/monitoring/access
   destination:
     server: https://kubernetes.default.svc
@@ -162,7 +162,7 @@ spec:
       valueFiles:
       - $values/kubernetes/platform/monitoring/promtail.values.yaml
   - repoURL: "https://github.com/The-Keep-Studios/thekeep-platform.git"
-    targetRevision: "main"
+    targetRevision: "v0.1.0-alpha.1"
     ref: values
   destination:
     server: https://kubernetes.default.svc
