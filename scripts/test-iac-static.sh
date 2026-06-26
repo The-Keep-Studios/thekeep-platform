@@ -64,6 +64,13 @@ grep -q "pathType: Exact" "${leantime_render}"
 grep -q "replacement: https://projects.thekeepstudios.com/dashboard/home" "${leantime_render}"
 grep -q "default-leantime-root-ui-redirect@kubernetescrd" "${leantime_render}"
 
+log "Baserow CRM app domain check"
+baserow_render="${tmp_dir}/baserow-crm-domain.yaml"
+kubectl kustomize kubernetes/apps/baserow > "${baserow_render}"
+grep -q "name: BASEROW_BUILDER_DOMAINS" "${baserow_render}"
+grep -q "value: crm.thekeepstudios.com" "${baserow_render}"
+grep -q "host: crm.thekeepstudios.com" "${baserow_render}"
+
 log "Ansible syntax check"
 inventory="ansible/inventory.production.ini"
 if [ ! -f "${inventory}" ]; then

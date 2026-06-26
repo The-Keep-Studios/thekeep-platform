@@ -27,6 +27,7 @@ Included:
 - Baserow all-in-one Kubernetes Deployment
 - PVC mounted at `/baserow/data`
 - Internal service and Traefik Ingress for `baserow.thekeepstudios.com`
+- Published CRM app domain at `crm.thekeepstudios.com`
 - Argo CD app registration as `platform-baserow`
 - Daily quiet-window backup CronJob
 - Restore runbook
@@ -52,17 +53,23 @@ Excluded:
    - Service type: `HTTPS`
    - Service URL: `traefik.kube-system.svc.cluster.local`
    - Origin setting: `No TLS Verify`
-2. Add Cloudflare Access in front of `baserow.thekeepstudios.com`.
-3. Apply or sync the `platform-baserow` Argo CD application.
-4. Wait for:
+2. Create a second Cloudflare Tunnel public hostname for the published CRM app:
+   - Hostname: `crm.thekeepstudios.com`
+   - Service type: `HTTPS`
+   - Service URL: `traefik.kube-system.svc.cluster.local`
+   - Origin setting: `No TLS Verify`
+3. Add Cloudflare Access in front of `baserow.thekeepstudios.com` and `crm.thekeepstudios.com`.
+4. Apply or sync the `platform-baserow` Argo CD application.
+5. Wait for:
    - `application/platform-baserow` to become `Synced Healthy`
    - `deployment/baserow` to become available in namespace `baserow`
-5. Open Baserow and create the first admin account.
-6. Create the two workspaces.
-7. Build the tables from `baserow-schema.md`.
-8. Enter 5 to 10 real convention or partner contacts manually.
-9. Review the data-boundary policy before adding Full Hearts records.
-10. Confirm the backup CronJob exists.
+6. Open Baserow and create the first admin account.
+7. Create the two workspaces.
+8. Build the tables from `baserow-schema.md`.
+9. Publish the CRM Application Builder app on `crm.thekeepstudios.com`.
+10. Enter 5 to 10 real convention or partner contacts manually.
+11. Review the data-boundary policy before adding Full Hearts records.
+12. Confirm the backup CronJob exists.
 
 ## Day-One Success Criteria
 

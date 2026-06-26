@@ -765,7 +765,7 @@
     url: "{{ item }}"
     status_code: [200, 401, 403]
     timeout: 15
-  loop: "{{ ['https://auth.thekeepstudios.com', 'https://projects.thekeepstudios.com', 'https://mindmaps.thekeepstudios.com', 'https://baserow.thekeepstudios.com', 'https://grafana.thekeepstudios.com', 'https://prometheus.thekeepstudios.com', 'https://alerts.thekeepstudios.com', 'https://argocd.thekeepstudios.com'] + (['https://twenty.thekeepstudios.com'] if (platform_validation_twenty_enabled | bool) else []) + (['https://espocrm.thekeepstudios.com'] if (platform_validation_espocrm_enabled | bool) else []) }}"
+  loop: "{{ ['https://auth.thekeepstudios.com', 'https://projects.thekeepstudios.com', 'https://mindmaps.thekeepstudios.com', 'https://baserow.thekeepstudios.com', 'https://crm.thekeepstudios.com', 'https://grafana.thekeepstudios.com', 'https://prometheus.thekeepstudios.com', 'https://alerts.thekeepstudios.com', 'https://argocd.thekeepstudios.com'] + (['https://twenty.thekeepstudios.com'] if (platform_validation_twenty_enabled | bool) else []) + (['https://espocrm.thekeepstudios.com'] if (platform_validation_espocrm_enabled | bool) else []) }}"
   when: require_external_https | default(true) | bool
 
 - name: Verify protected endpoints require authentication
@@ -775,6 +775,7 @@
     timeout: 15
     follow_redirects: all
   loop:
+    - https://crm.thekeepstudios.com
     - https://prometheus.thekeepstudios.com
     - https://alerts.thekeepstudios.com
   when: require_external_https | default(true) | bool
