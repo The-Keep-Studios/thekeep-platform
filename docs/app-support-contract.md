@@ -72,6 +72,83 @@ Private installation configuration does not belong in Git:
 
 When a value is required but private, add an example key and document where the operator sets it.
 
+## App Support Versus App Instances
+
+TKP public app support and private app instances are different artifacts.
+
+Public app support belongs in this repository. It answers: can TKP deploy and
+operate this type of app safely? Public support can include Kubernetes
+manifests, Helm values, validation scripts, example secret keys, backup shape,
+access-boundary guidance, and docs for operators.
+
+Private app instances belong in an installation repository, ignored local vars,
+or another private operator-controlled source. They answer: which concrete
+instances run for this installation? Instance config includes real hostnames,
+secret names, storage/database bindings, account identifiers, provider
+credentials, and client-specific policy.
+
+The first model is documentation and naming convention only. Add Ansible vars,
+Helm values, Kustomize overlays, or generated Applications later only when at
+least two supported apps need the same concrete instance machinery.
+
+### Minimal Instance Schema
+
+Use this shape when documenting or privately configuring an instance. Examples
+must use fake domains and fake secret names only.
+
+```yaml
+app_instances:
+  - app_type: baserow
+    instance_name: example-client-baserow
+    namespace: example-client-baserow
+    hostname: data.example-client.invalid
+    access_policy: internal-authenticated
+    exposure:
+      public_ingress: true
+      cloudflare_tunnel_route: true
+    storage:
+      pvc_prefix: example-client-baserow
+      database_binding: example-client-baserow-db
+    secrets:
+      app_secret_ref: example-client-baserow-app-secret
+      oidc_secret_ref: example-client-baserow-oidc-secret
+    backups:
+      enabled: true
+      schedule: "17 3 * * *"
+      retention: 14d
+```
+
+Required fields:
+
+- `app_type`: supported app family, such as `baserow`, `postiz`, `mixpost`, or `dmarc-monitor`.
+- `instance_name`: DNS-safe instance identifier used as the resource prefix.
+- `namespace`: Kubernetes namespace for the instance.
+- `hostname`: concrete route for the instance, kept private unless it is a safe fake example.
+- `access_policy`: intended boundary, such as `internal-only`, `internal-authenticated`, or `public-readonly`.
+- `storage` / `database_binding`: names or references that keep PVCs and databases unique per instance.
+- `secrets`: references to Kubernetes Secrets or external secret objects, never literal secret values.
+- `backups`: whether durable data is backed up, on what schedule, and with what retention expectation.
+
+Optional fields can include resource sizing, ingress class, OAuth client refs,
+mailbox refs, alert routing, restore runbook, or service-specific feature flags.
+
+### Naming And Isolation Rules
+
+- Use one namespace per externally meaningful app instance unless there is a documented reason to share.
+- Prefix Deployments, Services, PVCs, database names, backup jobs, and secret refs with `instance_name`.
+- Never reuse a PVC, database, hostname, OAuth client, mailbox, or social-provider credential across unrelated instances.
+- Keep secret values in platform secret storage or a private installation repo; public examples may document keys and fake refs only.
+- Public app support may define `secret.example.yaml` files with required keys, but concrete secret names and values are installation-level decisions.
+- If an app supports multiple organizations inside one runtime, still document whether TKP treats that as one shared instance or several isolated instances.
+
+### Candidate Consumers
+
+Postiz (#50), Mixpost (#51), and DMARC monitoring (#67) should consume this
+model before adding real deployment support. Their public app support can define
+runtime requirements and validation commands here, while concrete domains,
+mailboxes, social-provider credentials, and client-specific settings stay in
+private installation configuration.
+
 ## Manifest Rules
 
 Kubernetes manifests should be explicit enough for review:
