@@ -48,6 +48,16 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Set up Go for actionlint
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.23"
+
+      - name: Install actionlint
+        run: |
+          go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.7
+          echo "${HOME}/go/bin" >> "${GITHUB_PATH}"
+
       - name: Install Ansible
         run: python -m pip install ansible-core==2.16.3
 
@@ -57,4 +67,6 @@ jobs:
           version: v1.33.0
 
       - name: Run quality checks
+        env:
+          QUALITY_REQUIRE_ACTIONLINT: "true"
         run: scripts/test-quality.sh

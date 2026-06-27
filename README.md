@@ -232,7 +232,22 @@ The first enforced baseline reuses `scripts/test-iac-static.sh`, which already c
 QUALITY_STRICT=true scripts/test-quality.sh
 ```
 
-Use the strict mode to evaluate `shellcheck`, `shfmt`, `actionlint`, `yamllint`, `ruff`, and `hadolint` without turning noisy or branch-specific tools into a default PR blocker too early.
+The default gate also runs `scripts/check-secrets.sh`, a lightweight secret exposure scan for high-confidence private key blocks, common token prefixes, kubeconfig private keys, and private installation config filenames such as `ansible/production_vars.yml`, `ansible/inventory.production.ini`, and `scripts/production.env`.
+
+GitHub Actions linting is promoted as the first traditional external linter. CI installs `actionlint` and runs `scripts/test-quality.sh` with `QUALITY_REQUIRE_ACTIONLINT=true`; local runs use `actionlint` when it is installed and otherwise report a skip.
+
+Use strict mode to keep evaluating `shellcheck`, `shfmt`, `yamllint`, `ruff`, and `hadolint` without turning noisy or branch-specific tools into a default PR blocker too early.
+
+Current quality-gate decisions:
+
+| Check | Default status | Reason |
+| --- | --- | --- |
+| Secret exposure scan | Enforced locally and in CI | High-confidence patterns only; no broad allowlist that could normalize real secrets. |
+| `actionlint` | Enforced in CI; local when installed | One workflow, low-noise validation, no source rewrites required. |
+| Kustomize render and Ansible syntax | Enforced | Existing static IaC baseline with useful signal. |
+| `kubeconform` / `kubeval` | Opportunistic when installed | Useful schema check, but CRDs and remote bases still need scoped handling before requiring it everywhere. |
+| `shellcheck`, `shfmt`, `yamllint`, `ansible-lint` | Strict/evaluation only | Keep out of the default gate until their noise profile is reduced without broad style rewrites. |
+| `ruff`, `hadolint` | Deferred until matching files exist | No tracked Python service files or container build files on `main` yet. |
 
 ## Operations Runbook
 

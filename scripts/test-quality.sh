@@ -4,6 +4,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "${SCRIPT_DIR}")"
 QUALITY_STRICT="${QUALITY_STRICT:-false}"
+QUALITY_REQUIRE_ACTIONLINT="${QUALITY_REQUIRE_ACTIONLINT:-false}"
 cd "${PROJECT_ROOT}"
 export ANSIBLE_STDOUT_CALLBACK="${ANSIBLE_STDOUT_CALLBACK:-default}"
 
@@ -21,6 +22,24 @@ count_repo_files() {
 
 command_available() {
   command -v "$1" >/dev/null 2>&1
+}
+
+run_actionlint() {
+  local workflow_files=()
+  mapfile -t workflow_files < <(repo_files '.github/workflows/*.yml' '.github/workflows/*.yaml')
+  if [ "${#workflow_files[@]}" -eq 0 ]; then
+    echo "skip actionlint: no GitHub workflow files"
+    return
+  fi
+
+  if command_available actionlint; then
+    actionlint "${workflow_files[@]}"
+  elif [ "${QUALITY_REQUIRE_ACTIONLINT}" = "true" ]; then
+    echo "Missing required command: actionlint" >&2
+    exit 1
+  else
+    echo "skip actionlint: not installed"
+  fi
 }
 
 run_optional_linters() {
@@ -42,16 +61,6 @@ run_optional_linters() {
       shfmt -d "${shell_files[@]}"
     else
       echo "skip shfmt: not installed"
-    fi
-  fi
-
-  local workflow_files=()
-  mapfile -t workflow_files < <(repo_files '.github/workflows/*.yml' '.github/workflows/*.yaml')
-  if [ "${#workflow_files[@]}" -gt 0 ]; then
-    if command_available actionlint; then
-      actionlint "${workflow_files[@]}"
-    else
-      echo "skip actionlint: not installed"
     fi
   fi
 
@@ -95,6 +104,12 @@ printf 'python_files=%s\n' "$(count_repo_files '*.py')"
 printf 'container_build_files=%s\n' "$(count_repo_files 'Dockerfile' '**/Dockerfile' '*.Dockerfile' '*Dockerfile')"
 printf 'github_workflows=%s\n' "$(count_repo_files '.github/workflows/*.yml' '.github/workflows/*.yaml')"
 printf 'markdown_files=%s\n' "$(count_repo_files '*.md')"
+
+log "Lightweight secret scan"
+"${SCRIPT_DIR}/check-secrets.sh"
+
+log "GitHub Actions lint"
+run_actionlint
 
 log "Baseline static checks"
 "${SCRIPT_DIR}/test-iac-static.sh"
