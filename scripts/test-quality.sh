@@ -89,6 +89,7 @@ run_optional_linters() {
 log "Quality inventory"
 printf 'shell_scripts=%s\n' "$(count_repo_files '*.sh')"
 printf 'yaml_files=%s\n' "$(count_repo_files '*.yml' '*.yaml')"
+printf 'json_files=%s\n' "$(count_repo_files '*.json')"
 printf 'ansible_files=%s\n' "$(count_repo_files 'ansible/**')"
 printf 'kubernetes_files=%s\n' "$(count_repo_files 'kubernetes/**')"
 printf 'python_files=%s\n' "$(count_repo_files '*.py')"
@@ -98,6 +99,9 @@ printf 'markdown_files=%s\n' "$(count_repo_files '*.md')"
 
 log "Baseline static checks"
 "${SCRIPT_DIR}/test-iac-static.sh"
+
+log "App-instance example checks"
+python3 "${SCRIPT_DIR}/test-app-instance-examples.py"
 
 log "Optional traditional linters"
 run_optional_linters

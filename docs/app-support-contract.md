@@ -94,7 +94,9 @@ least two supported apps need the same concrete instance machinery.
 ### Minimal Instance Schema
 
 Use this shape when documenting or privately configuring an instance. Examples
-must use fake domains and fake secret names only.
+must use fake domains and fake secret names only. The checked fake examples live
+in `examples/app-instances.example.json`; `scripts/test-app-instance-examples.py`
+validates that they remain fake, unique, and structurally useful.
 
 ```yaml
 app_instances:
