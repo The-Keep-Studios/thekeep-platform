@@ -1,0 +1,54 @@
+{
+  "app_instances": [
+    {
+      "app_type": "baserow",
+      "instance_name": "example-client-baserow",
+      "namespace": "example-client-baserow",
+      "hostname": "data.example-client.invalid",
+      "access_policy": "internal-authenticated",
+      "exposure": {
+        "public_ingress": true,
+        "cloudflare_tunnel_route": true
+      },
+      "storage": {
+        "pvc_prefix": "example-client-baserow",
+        "database_binding": "example-client-baserow-db"
+      },
+      "secrets": {
+        "app_secret_ref": "example-client-baserow-app-secret",
+        "oidc_secret_ref": "example-client-baserow-oidc-secret"
+      },
+      "backups": {
+        "enabled": true,
+        "schedule": "17 3 * * *",
+        "retention": "14d"
+      }
+    },
+    {
+      "app_type": "postiz",
+      "instance_name": "example-client-postiz",
+      "namespace": "example-client-postiz",
+      "hostname": "social.example-client.invalid",
+      "access_policy": "internal-authenticated",
+      "exposure": {
+        "public_ingress": true,
+        "cloudflare_tunnel_route": true
+      },
+      "storage": {
+        "pvc_prefix": "example-client-postiz",
+        "database_binding": "example-client-postiz-db"
+      },
+      "secrets": {
+        "app_secret_ref": "example-client-postiz-app-secret",
+        "oidc_secret_ref": "example-client-postiz-oidc-secret",
+        "smtp_secret_ref": "example-client-postiz-smtp-secret",
+        "social_provider_secret_ref": "example-client-postiz-social-provider-secret"
+      },
+      "backups": {
+        "enabled": true,
+        "schedule": "29 3 * * *",
+        "retention": "14d"
+      }
+    }
+  ]
+}

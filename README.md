@@ -150,7 +150,7 @@ Target for full production:
 - Argo CD continuously reconciles to Git state.
 - Runtime secrets come from Kubernetes Secrets today and should evolve to external or encrypted secret management.
 - Deployments should assume eventual multi-node scheduling, even if the current cluster is single-node.
-- For the repeatable app-support shape, see `docs/app-support-contract.md`.
+- For the repeatable app-support shape and public app-support/private app-instance model, see `docs/app-support-contract.md`.
 
 ### Developer Rules Of Thumb
 
