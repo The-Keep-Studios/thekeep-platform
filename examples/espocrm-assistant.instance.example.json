@@ -1,0 +1,288 @@
+{
+  "contract_version": "2026-06-30.fake.v1",
+  "purpose": "Fake TKP-side EspoCRM assistant integration contract for issue #28.",
+  "assistant_image": "ghcr.io/the-keep-studios/espocrm-assistant@sha256:aea7326a6df729feb94595740040aba184274d0f897fdd4ffcc5d8408df3e585",
+  "source_boundary": {
+    "service_source_repo": "The-Keep-Studios/espocrm-assistant",
+    "tkp_contract_only": true,
+    "no_service_source_in_tkp": true
+  },
+  "runtime_boundary": {
+    "namespace": "espocrm",
+    "service_name": "espocrm-assistant",
+    "public_exposure": "none",
+    "mcp_port_name": "mcp",
+    "approval_port_name": "approval",
+    "browser_automation_allowed": false,
+    "network_calls_by_validator": false
+  },
+  "secrets": {
+    "read_api_key_secret_ref": {
+      "name": "espocrm-assistant-secrets",
+      "key": "ESPOCRM_READ_API_KEY",
+      "purpose": "Read-only EspoCRM API user for assistant-visible search and metadata tools."
+    },
+    "write_api_key_secret_ref": {
+      "name": "espocrm-assistant-secrets",
+      "key": "ESPOCRM_WRITE_API_KEY",
+      "purpose": "Separate EspoCRM API user used only by the approved apply path."
+    },
+    "assistant_token_secret_ref": {
+      "name": "espocrm-assistant-secrets",
+      "key": "ESPOCRM_ASSISTANT_TOKEN",
+      "purpose": "Internal helper-route token reference, never a literal token value."
+    },
+    "assistant_apply_token_secret_ref": {
+      "name": "espocrm-assistant-secrets",
+      "key": "ESPOCRM_ASSISTANT_APPLY_TOKEN",
+      "purpose": "Approval/apply token reference, never a literal token value."
+    }
+  },
+  "allowed_entities": [
+    {
+      "entity": "Lead",
+      "read": true,
+      "write": [
+        "create",
+        "update"
+      ],
+      "delete": false,
+      "required_approval": true,
+      "allowed_fields": [
+        "name",
+        "accountName",
+        "emailAddress",
+        "phoneNumber",
+        "title",
+        "website",
+        "status",
+        "source",
+        "opportunityAmount",
+        "industry",
+        "description",
+        "assignedUserName",
+        "teamsNames"
+      ]
+    },
+    {
+      "entity": "Opportunity",
+      "read": true,
+      "write": [
+        "create",
+        "update"
+      ],
+      "delete": false,
+      "required_approval": true,
+      "requires_reciprocal_signal": true,
+      "allowed_fields": [
+        "name",
+        "accountName",
+        "contactName",
+        "amount",
+        "stage",
+        "probability",
+        "closeDate",
+        "description"
+      ]
+    },
+    {
+      "entity": "Account",
+      "read": true,
+      "write": [
+        "create",
+        "update"
+      ],
+      "delete": false,
+      "required_approval": true,
+      "allowed_fields": [
+        "name",
+        "website",
+        "industry",
+        "description"
+      ]
+    },
+    {
+      "entity": "Contact",
+      "read": true,
+      "write": [
+        "create",
+        "update"
+      ],
+      "delete": false,
+      "required_approval": true,
+      "allowed_fields": [
+        "firstName",
+        "lastName",
+        "accountName",
+        "emailAddress",
+        "phoneNumber",
+        "title",
+        "description"
+      ]
+    },
+    {
+      "entity": "Task",
+      "read": true,
+      "write": [
+        "create",
+        "update"
+      ],
+      "delete": false,
+      "required_approval": true,
+      "allowed_fields": [
+        "name",
+        "status",
+        "priority",
+        "dateStart",
+        "dateEnd",
+        "parentType",
+        "parentName",
+        "description"
+      ]
+    },
+    {
+      "entity": "Email",
+      "read": true,
+      "write": [],
+      "delete": false,
+      "required_approval": false,
+      "allowed_fields": [
+        "subject",
+        "from",
+        "to",
+        "dateSent",
+        "parentType",
+        "parentName"
+      ]
+    }
+  ],
+  "write_policy": {
+    "write_approval_mode": "human-required",
+    "dry_run_required": true,
+    "audit_log_required": true,
+    "audit_log_ref": "espocrm-assistant-audit",
+    "no_delete_policy": true,
+    "human_approval_gate_required": true,
+    "opportunity_requires_reciprocal_signal": true,
+    "auto_apply_allowed": false,
+    "unsolicited_outreach_allowed": false
+  },
+  "fixtures": [
+    {
+      "fixture_id": "fixture-recruiter-outreach",
+      "workflow": "recruiter_outreach",
+      "source": {
+        "kind": "email",
+        "sender": "recruiter@example.test",
+        "subject": "Remote platform role at Example Robotics",
+        "received_at": "2026-06-01T12:00:00Z"
+      },
+      "classification": "opportunity_candidate",
+      "next_action": "Prepare follow-up questions for human review.",
+      "approval_needed": true,
+      "reciprocal_signal": true
+    },
+    {
+      "fixture_id": "fixture-ats-confirmation",
+      "workflow": "ats_confirmation",
+      "source": {
+        "kind": "email",
+        "sender": "no-reply@ats.example.test",
+        "subject": "Application received for Platform Automation Engineer",
+        "received_at": "2026-06-02T15:30:00Z"
+      },
+      "classification": "lead",
+      "next_action": "Record confirmation and wait for human or hiring-team response.",
+      "approval_needed": true,
+      "reciprocal_signal": false
+    },
+    {
+      "fixture_id": "fixture-cold-application-lead",
+      "workflow": "cold_application_lead",
+      "source": {
+        "kind": "job_board",
+        "sender": "jobs@example.test",
+        "subject": "Founding automation consultant opening",
+        "received_at": "2026-06-03T09:15:00Z"
+      },
+      "classification": "priority_lead",
+      "next_action": "Draft a tailored application packet for human approval.",
+      "approval_needed": true,
+      "reciprocal_signal": false
+    }
+  ],
+  "dry_run_change_sets": [
+    {
+      "change_set_id": "dryrun-recruiter-outreach-001",
+      "source_fixture_id": "fixture-recruiter-outreach",
+      "workflow": "recruiter_outreach",
+      "dry_run": true,
+      "approval_required": true,
+      "delete_allowed": false,
+      "changes": [
+        {
+          "change_id": "change-lead-recruiter-outreach",
+          "action": "create",
+          "entity": "Lead",
+          "human_approval_gate": "required",
+          "no_delete": true,
+          "source_attribution": "fixture-recruiter-outreach",
+          "audit_note": "Assistant-originated dry run for recruiter outreach fixture.",
+          "fields": {
+            "name": "Platform role - Example Robotics",
+            "accountName": "Example Robotics",
+            "emailAddress": "recruiter@example.test",
+            "status": "New",
+            "source": "Recruiter",
+            "description": "Fake recruiter outreach fixture. Reciprocal signal is present; Opportunity conversion still requires human approval."
+          }
+        },
+        {
+          "change_id": "change-task-recruiter-followup",
+          "action": "create",
+          "entity": "Task",
+          "human_approval_gate": "required",
+          "no_delete": true,
+          "source_attribution": "fixture-recruiter-outreach",
+          "audit_note": "Assistant-originated dry run for recruiter follow-up task.",
+          "fields": {
+            "name": "Ask recruiter about remote scope and compensation band",
+            "status": "Not Started",
+            "priority": "Normal",
+            "parentType": "Lead",
+            "parentName": "Platform role - Example Robotics",
+            "description": "Do not send automatically. Human must approve any outbound message."
+          }
+        }
+      ]
+    },
+    {
+      "change_set_id": "dryrun-ats-confirmation-001",
+      "source_fixture_id": "fixture-ats-confirmation",
+      "workflow": "ats_confirmation",
+      "dry_run": true,
+      "approval_required": true,
+      "delete_allowed": false,
+      "changes": [
+        {
+          "change_id": "change-lead-ats-confirmation",
+          "action": "update",
+          "entity": "Lead",
+          "human_approval_gate": "required",
+          "no_delete": true,
+          "source_attribution": "fixture-ats-confirmation",
+          "audit_note": "Assistant-originated dry run for ATS confirmation fixture.",
+          "match": {
+            "company": "Example Systems",
+            "job_title": "Platform Automation Engineer"
+          },
+          "fields": {
+            "status": "In Process",
+            "source": "Application Confirmation",
+            "description": "Fake ATS confirmation fixture. Keep as Lead because no reciprocal human signal is present."
+          }
+        }
+      ]
+    }
+  ]
+}
