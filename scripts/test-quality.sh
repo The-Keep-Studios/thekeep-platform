@@ -118,6 +118,9 @@ log "Baseline static checks"
 log "App-instance example checks"
 python3 "${SCRIPT_DIR}/test-app-instance-examples.py"
 
+log "EspoCRM assistant contract checks"
+python3 "${SCRIPT_DIR}/test-espocrm-assistant-contract.py"
+
 log "Optional traditional linters"
 run_optional_linters
 

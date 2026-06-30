@@ -948,6 +948,21 @@ published service image by immutable digest:
 ghcr.io/the-keep-studios/espocrm-assistant@sha256:aea7326a6df729feb94595740040aba184274d0f897fdd4ffcc5d8408df3e585
 ```
 
+The fake TKP-side assistant contract in
+`examples/espocrm-assistant.instance.example.json` captures the public/private
+boundary without real EspoCRM data: immutable image digest, secret references by
+name only, allowed entities, dry-run changeset shape, no-delete policy,
+human-approval gate, and audit-log requirement. Validate it with:
+
+```bash
+python3 scripts/test-espocrm-assistant-contract.py
+```
+
+This advances #28 by making the TKP deployment/configuration contract testable.
+It does not close #28; real least-privilege role evidence and UAT against
+non-production-safe EspoCRM data are still required before the parent feature is
+complete.
+
 Optional app backup CronJobs:
 
 ```text
