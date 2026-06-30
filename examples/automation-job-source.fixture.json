@@ -23,7 +23,11 @@
         "automation",
         "platform"
       ],
-      "risk_flags": []
+      "risk_flags": [],
+      "details": {
+        "remote_policy": "remote",
+        "fit_reason": "Strong match for platform automation and Linux operations."
+      }
     },
     {
       "item_id": "fake-job-002",
@@ -40,7 +44,11 @@
         "human_reply",
         "consulting"
       ],
-      "risk_flags": []
+      "risk_flags": [],
+      "details": {
+        "reciprocal_signal_detail": "Recruiter asked for availability and next-step preferences.",
+        "expected_next_step": "Reply with availability after human review."
+      }
     },
     {
       "item_id": "fake-job-003",
@@ -55,7 +63,49 @@
         "application_confirmation",
         "automated"
       ],
-      "risk_flags": []
+      "risk_flags": [],
+      "details": {
+        "application_reference": "fake-application-001"
+      }
+    },
+    {
+      "item_id": "fake-client-001",
+      "source_kind": "client_inquiry",
+      "source": "example-consulting-inquiry",
+      "received_at": "2026-06-07T16:20:00Z",
+      "company": "Example Advisory Co",
+      "role": "Internal Automation Assessment",
+      "description": "Founder asked about help mapping manual operations into a small self-hosted automation workflow.",
+      "contact": "founder@example.test",
+      "signals": [
+        "inbound_inquiry",
+        "consulting",
+        "automation"
+      ],
+      "risk_flags": [],
+      "details": {
+        "decision_maker": "founder"
+      }
+    },
+    {
+      "item_id": "fake-job-004",
+      "source_kind": "job_lead",
+      "source": "example-community-board",
+      "received_at": "2026-06-08T09:05:00Z",
+      "company": "Example Retail Group",
+      "role": "Onsite Helpdesk Analyst",
+      "description": "Local onsite support role with no automation scope and no remote option.",
+      "contact": "ops@example.test",
+      "signals": [
+        "operations"
+      ],
+      "risk_flags": [
+        "onsite_only",
+        "low_fit"
+      ],
+      "details": {
+        "fit_reason": "Poor fit: onsite-only support role without platform automation scope."
+      }
     }
   ]
 }

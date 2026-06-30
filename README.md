@@ -297,25 +297,26 @@ Before opening an app-support PR, include relevant evidence:
 
 ### Local Automation Fixture
 
-`scripts/run-automation-fixture.py` is the first local-only automation scaffold
-for #15 and #28. It reads fake job-source data from
-`examples/automation-job-source.fixture.json` and emits deterministic Markdown
-with source attribution, lead/opportunity classification, recommended CRM
-action, summary, next action, and an approval-required marker. The current fake
-intake workflow covers a job lead, recruiter email, and application
-confirmation. The default provider is fake and requires no hosted API key, no
-network access, and no real Gmail, EspoCRM, Leantime, client, or production
-data.
+`scripts/run-automation-fixture.py` runs the local fake lead-triage automation
+loop for #15 and #28. It reads fake job/client intake data from
+`examples/automation-job-source.fixture.json`, prints a deterministic Markdown
+triage report, and can write machine-readable dry-run JSON. The workflow covers
+a job lead, recruiter email, ATS confirmation, consulting/client inquiry, and
+poor-fit rejection. It performs no network calls, uses no secrets, reads no real
+Gmail/EspoCRM/Leantime data, and writes no CRM records.
 
 ```bash
 python3 scripts/run-automation-fixture.py \
-  --fixture examples/automation-job-source.fixture.json
+  --fixture examples/automation-job-source.fixture.json \
+  --json-output .artifacts/automation-triage.dry-run.json
 ```
 
 Use `--provider local-auto` to detect supported local model CLIs without making
 model calls. If no local provider command is present, the runner reports the
 skip and still uses the deterministic fake provider. Use `--self-test` to verify
-that fixtures with missing required fields fail validation.
+that malformed fixtures fail, missing fields are surfaced, rejected items do not
+produce CRM payloads, and Opportunity candidates require reciprocal signal or
+explicit override.
 
 ### TODO Tracking Standard
 
