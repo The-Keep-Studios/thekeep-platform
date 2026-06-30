@@ -4,6 +4,24 @@ The Keep Platform is a small, self-hosted GitOps platform for running internal t
 
 It uses Ansible to provision machines, k3s to run workloads, and Argo CD to keep deployed services aligned with Git.
 
+## Contents
+
+- [60-Second Summary](#60-second-summary)
+- [Platform Shape](#platform-shape)
+- [What To Do First](#what-to-do-first)
+- [How It Works](#how-it-works)
+- [Current Maturity and Limits](#current-maturity-and-limits)
+- [App Developers: Architecture You Deploy On](#app-developers-architecture-you-deploy-on)
+- [TODO Ledger](#todo-ledger)
+- [Quality Checks](#quality-checks)
+- [Local Testing And Observation](#local-testing-and-observation)
+- [Operations Runbook](#operations-runbook)
+- [Auth, OIDC, And Routing Notes](#auth-oidc-and-routing-notes)
+- [Optional CRM And Assistant](#optional-crm-and-assistant)
+- [Host Disk Pressure Check](#host-disk-pressure-check)
+- [Planned Hardening](#planned-hardening)
+- [File Map](#file-map)
+
 ## 60-Second Summary
 
 - This repo defines a recoverable, production-like platform on k3s.
@@ -88,8 +106,8 @@ scripts/check-local-prereqs.sh sandbox
 ansible-playbook -i ansible/inventory.ini ansible/setup_dev_environment.yml
 ```
 
-See [`docs/local-iac-testing.md`](docs/local-iac-testing.md) for profiles,
-observation, cleanup, and troubleshooting.
+The supported profiles, smoke tests, and observation paths are summarized in
+[Local Testing And Observation](#local-testing-and-observation).
 
 For a new production-like deployment:
 
@@ -150,7 +168,9 @@ Target for full production:
 - Argo CD continuously reconciles to Git state.
 - Runtime secrets come from Kubernetes Secrets today and should evolve to external or encrypted secret management.
 - Deployments should assume eventual multi-node scheduling, even if the current cluster is single-node.
-- For the repeatable app-support shape and public app-support/private app-instance model, see `docs/app-support-contract.md`.
+- Supported apps should follow the contract below: explicit namespace,
+  workloads, storage, secrets, networking, probes, backup, validation, and
+  rollback boundaries.
 
 ### Developer Rules Of Thumb
 
@@ -165,6 +185,106 @@ Target for full production:
 - Avoid new production dependencies unless they are worth their long-term operational cost.
 - Test static rendering and local smoke paths before applying changes to production.
 - Make observability and rollback part of every service change, especially for public endpoints and stateful workloads.
+
+### App Support Contract
+
+Use this shape for apps managed by Kubernetes manifests, Helm values,
+Ansible-rendered secrets, Argo CD applications, or local dev smoke/observe
+scripts. Do not use it to justify broad rewrites; explicit manifests are fine
+when they make security, storage, or runtime behavior easier to review.
+
+Each supported app should define:
+
+- Purpose: internal, public, optional, demo-only, or production-supported.
+- Runtime owner: GitOps-only, Ansible-seeded, or still partly manual.
+- Namespace, workloads, storage, secrets, config, networking, probes, backups,
+  validation, and rollback.
+- Required operator-provided values without committing private installation
+  configuration.
+
+Preferred Kubernetes app layout:
+
+```text
+kubernetes/apps/<app>/
+  kustomization.yaml
+  production.yaml
+  backup-cronjob.yaml       # when the app has durable data
+  secret.example.yaml       # when operators must provide Kubernetes secrets
+```
+
+Public support configuration belongs in tracked files only when it is safe and
+reusable: manifests, Helm values, examples, non-secret defaults, validation
+scripts, and generic operator guidance. Private installation config does not
+belong in Git: production passwords, tokens, kubeconfigs, local inventories,
+customer-specific values, generated artifacts, screenshots, or local agent
+memory.
+
+Public app support and private app instances are different artifacts:
+
+- Public app support answers whether TKP can deploy and operate an app type.
+- Private app instances answer which concrete instances run for one
+  installation, with real hostnames, secret names, storage/database bindings,
+  account identifiers, provider credentials, and policy.
+
+Use the app-instance model only when a real consumer needs it. Fake examples
+live in `examples/app-instances.example.json`, and
+`scripts/test-app-instance-examples.py` validates that they stay fake, unique,
+and structurally useful.
+
+Minimal app-instance fields:
+
+```yaml
+app_instances:
+  - app_type: baserow
+    instance_name: example-client-baserow
+    namespace: example-client-baserow
+    hostname: data.example-client.invalid
+    access_policy: internal-authenticated
+    exposure:
+      public_ingress: true
+      cloudflare_tunnel_route: true
+    storage:
+      pvc_prefix: example-client-baserow
+      database_binding: example-client-baserow-db
+    secrets:
+      app_secret_ref: example-client-baserow-app-secret
+      oidc_secret_ref: example-client-baserow-oidc-secret
+    backups:
+      enabled: true
+      schedule: "17 3 * * *"
+      retention: 14d
+```
+
+Instance rules:
+
+- Use one namespace per externally meaningful instance unless sharing is
+  deliberate and documented.
+- Prefix Deployments, Services, PVCs, database names, backup jobs, and secret
+  refs with `instance_name`.
+- Never reuse PVCs, databases, hostnames, OAuth clients, mailboxes, or provider
+  credentials across unrelated instances.
+- Keep secret values in platform secret storage or a private installation repo.
+
+Manifest rules:
+
+- Use one namespace per app unless it deliberately belongs in a shared platform
+  namespace.
+- Pin third-party app image tags or digests for production-supported workloads.
+- Set resource requests and limits for long-running workloads.
+- Prefer named ports and readiness probes that validate a real serving path.
+- Keep public URLs, ingress auth, Cloudflare assumptions, and backup behavior
+  visible in manifests or README.
+- Do not introduce Helm, generators, or custom templating only to reduce line
+  count.
+
+Before opening an app-support PR, include relevant evidence:
+
+- `scripts/test-iac-static.sh`
+- app-specific dev smoke or observe command when practical;
+- `kubectl kustomize kubernetes/apps/<app>` for manifest changes;
+- Ansible syntax checks when playbooks, roles, or vars examples change;
+- backup/restore evidence when durable data changes;
+- rollback notes another engineer can follow.
 
 ### Human And AI Collaboration
 
@@ -248,6 +368,134 @@ Current quality-gate decisions:
 | `kubeconform` / `kubeval` | Opportunistic when installed | Useful schema check, but CRDs and remote bases still need scoped handling before requiring it everywhere. |
 | `shellcheck`, `shfmt`, `yamllint`, `ansible-lint` | Strict/evaluation only | Keep out of the default gate until their noise profile is reduced without broad style rewrites. |
 | `ruff`, `hadolint` | Deferred until matching files exist | No tracked Python service files or container build files on `main` yet. |
+
+## Local Testing And Observation
+
+The local path has three layers: static checks, disposable k3d workload smoke
+tests, and browser observation against the running local app.
+
+Prerequisites:
+
+- Docker or a compatible container runtime.
+- `kubectl`
+- `k3d`
+- `ansible-playbook`
+- enough free disk for k3d image storage and local PVCs;
+- optional `kubeconform` or `kubeval` for stricter rendered manifest checks.
+
+Check prerequisites without changing anything:
+
+```bash
+scripts/check-local-prereqs.sh static
+scripts/check-local-prereqs.sh sandbox
+```
+
+Run the static gate:
+
+```bash
+scripts/test-iac-static.sh
+```
+
+Include remote Kustomize bases only when network access is expected:
+
+```bash
+IAC_STATIC_INCLUDE_REMOTE=true scripts/test-iac-static.sh
+```
+
+Use Ansible for the standard local workflow:
+
+```bash
+ansible-playbook -i ansible/inventory.ini ansible/setup_dev_environment.yml
+```
+
+Profiles:
+
+```text
+static       Static IaC checks only.
+wisemapping  Static checks, k3d cluster, WiseMapping smoke test.
+leantime     Static checks, k3d cluster, Leantime smoke test.
+baserow      Static checks, k3d cluster, Baserow smoke test.
+twenty       Static checks, k3d cluster, Twenty smoke test.
+espocrm      Static checks, k3d cluster, EspoCRM smoke test.
+optional-crm Static checks, k3d cluster, both optional CRM smoke tests.
+crm-bakeoff  Compatibility alias for optional-crm.
+platform     Static checks, k3d cluster, all local app smoke tests.
+```
+
+For static checks only:
+
+```bash
+ansible-playbook -i ansible/inventory.ini ansible/setup_dev_environment.yml \
+  -e local_dev_profile=static
+```
+
+Create or reuse the disposable cluster directly:
+
+```bash
+scripts/dev-cluster-up.sh
+```
+
+Delete it when finished:
+
+```bash
+scripts/dev-cluster-down.sh
+```
+
+Run smoke tests:
+
+```bash
+scripts/dev-smoke.sh wisemapping
+scripts/dev-smoke.sh leantime
+scripts/dev-smoke.sh baserow
+scripts/dev-smoke.sh twenty
+scripts/dev-smoke.sh espocrm
+scripts/dev-smoke.sh optional-crm
+scripts/dev-smoke.sh platform
+```
+
+Run manual observation after smoke tests:
+
+```bash
+scripts/dev-observe.sh wisemapping
+scripts/dev-observe.sh leantime
+scripts/dev-observe.sh baserow
+scripts/dev-observe.sh twenty
+scripts/dev-observe.sh espocrm
+scripts/dev-observe.sh optional-crm
+scripts/dev-observe.sh platform
+```
+
+Default local URLs:
+
+```text
+WiseMapping: http://localhost:18081
+Leantime:    http://localhost:18080
+Baserow:     http://localhost:18082
+Twenty:      http://localhost:18083
+EspoCRM:     http://localhost:18084
+```
+
+Observation artifacts are written under `.artifacts/dev-observe/` and may
+include probe HTML, screenshots, captured page HTML, Chromium logs, and
+port-forward logs. To capture artifacts without opening a browser:
+
+```bash
+DEV_OBSERVE_OPEN=false DEV_OBSERVE_HOLD=false scripts/dev-observe.sh platform
+```
+
+The local sandbox does not test Cloudflare Tunnel, external DNS, real TLS edge
+behavior, Authentik integration, Argo CD app-of-apps reconciliation, or
+production backup/restore gates. Use it to catch render errors, startup
+failures, and service-level smoke failures before pushing a branch to Argo CD.
+
+Common failures:
+
+- missing command: install the named prerequisite and rerun the checker;
+- Docker unavailable: make `docker info` work without sudo;
+- disk/pressure failure: free space, then recreate the disposable cluster;
+- image pull/network failure: retry after registry/network recovery;
+- port conflict during observation: set the documented `*_OBSERVE_PORT`
+  override.
 
 ## Operations Runbook
 
@@ -495,12 +743,13 @@ kubectl annotate application platform-root -n argocd \
   argocd.argoproj.io/refresh=hard --overwrite
 ```
 
-### OIDC Notes
+### Auth, OIDC, And Routing Notes
 
-Authentik is the intended internal identity hub. Configure Google once in Authentik upstream.
-For the platform-wide forward-auth path, see `docs/authentik-sso.md`.
+Authentik is the intended internal identity hub. Use native OIDC for apps that
+support it cleanly, and use Authentik Proxy Provider forward-auth for apps that
+need an external auth gate.
 
-Callback URLs:
+OIDC callback URLs:
 
 - Leantime: `https://projects.thekeepstudios.com/oidc/callback`
 - WiseMapping: `https://mindmaps.thekeepstudios.com/login/oauth2/code/google`
@@ -511,25 +760,208 @@ Issuer format:
 https://auth.thekeepstudios.com/application/o/<provider-slug>/
 ```
 
-Set Leantime OIDC values in ignored `ansible/production_vars.yml` under `platform_oidc.leantime`.
+Set Leantime OIDC values in ignored `ansible/production_vars.yml` under
+`platform_oidc.leantime`. WiseMapping does not currently render a Spring OAuth
+client registration while OIDC is disabled; add an Authentik-backed registration
+deliberately when WiseMapping SSO is implemented.
 
-WiseMapping does not currently render a Spring OAuth client registration while OIDC is disabled. Add an Authentik-backed registration deliberately when WiseMapping SSO is implemented.
+Authentik forward-auth resources:
+
+- `identity/authentik-forward-auth`: Traefik middleware.
+- `identity/authentik-forward-auth-outpost-routes`: routes
+  `/outpost.goauthentik.io/*` on protected app hosts back to Authentik's
+  embedded outpost.
+
+Do not attach the middleware to app ingresses until the Authentik Proxy Provider
+exists and the outpost route has been validated. In Authentik admin, create a
+Proxy Provider, use forward-auth mode, create or attach an application, and
+assign the provider to `authentik Embedded Outpost`.
+
+Test outpost routing before enforcing the middleware:
+
+```bash
+curl -I https://baserow.thekeepstudios.com/outpost.goauthentik.io/ping
+curl -I https://crm.thekeepstudios.com/outpost.goauthentik.io/ping
+```
+
+A healthy route returns `204` or an Authentik-managed response, not a Traefik
+`404` and not the upstream application.
+
+Apply forward-auth only after that validation:
+
+```bash
+kubectl annotate ingress baserow-ingress -n baserow \
+  traefik.ingress.kubernetes.io/router.middlewares=identity-authentik-forward-auth@kubernetescrd \
+  --overwrite
+```
+
+If an ingress already has middleware that must remain, chain both annotation
+values with a comma in Traefik order.
 
 Authentik bootstrap behavior:
 
-- `AUTHENTIK_BOOTSTRAP_PASSWORD` is only read on first startup with a fresh Authentik DB.
-- Reset admin password later with:
+- `AUTHENTIK_BOOTSTRAP_PASSWORD` is only read on first startup with a fresh
+  Authentik DB.
+- Reset the admin password later with:
 
 ```bash
 sudo -u k3s-admin -H env KUBECONFIG=/home/k3s-admin/.kube/config \
 kubectl exec -it deployment/authentik-server -n identity -- ak changepassword akadmin
 ```
 
+Leantime UI and MCP routing contract:
+
+- normal Leantime UI routes serve from the public Leantime host;
+- exact `/` requests redirect to `/dashboard/home`;
+- `/mcp` is the MCP streamable HTTP path;
+- MCP must never take over `/`.
+
+Validate the route guard:
+
+```bash
+scripts/check-leantime-routing.sh
+```
+
+For authenticated browser reproduction, provide secrets through the environment
+only:
+
+```bash
+LEANTIME_BROWSER_COOKIE='leantime_session=REDACTED' \
+LEANTIME_MCP_TOKEN='REDACTED' \
+  scripts/check-leantime-routing.sh
+```
+
+Never commit MCP tokens, browser cookies, or session IDs. Treat MCP as a
+privileged automation interface: require a personal access token or scoped API
+credential for every client, use HTTPS, retain Cloudflare/Traefik request
+limits, and restrict accepted origins where the plugin supports it.
+
+### Optional CRM And Assistant
+
+Baserow remains the core relationship-management app. Twenty and EspoCRM are
+optional apps that can be tested locally or enabled explicitly through GitOps.
+Use fake or low-risk sample data while comparing CRMs. Do not import regulated,
+client, production, credential, health, legal, or other sensitive organization
+data until an app has been deliberately chosen for that data class.
+
+Local tests:
+
+```bash
+scripts/dev-smoke.sh twenty
+scripts/dev-observe.sh twenty
+
+scripts/dev-smoke.sh espocrm
+scripts/dev-observe.sh espocrm
+
+scripts/dev-smoke.sh optional-crm
+scripts/dev-observe.sh optional-crm
+```
+
+Both optional apps are disabled by default:
+
+```yaml
+platform_optional_apps:
+  twenty:
+    enabled: false
+  espocrm:
+    enabled: false
+```
+
+Enable only the app being evaluated and add only its required secrets in ignored
+`ansible/production_vars.yml`.
+
+Twenty secrets:
+
+```yaml
+platform_secrets:
+  twenty_pg_database_password: "CHANGE_ME"
+  twenty_encryption_key: "CHANGE_ME"
+  twenty_app_secret: "CHANGE_ME"
+```
+
+EspoCRM secrets:
+
+```yaml
+platform_secrets:
+  espocrm_db_root_password: "CHANGE_ME"
+  espocrm_db_password: "CHANGE_ME"
+  espocrm_admin_password: "CHANGE_ME"
+```
+
+EspoCRM can optionally manage `emailServerAllowedAddressList` from
+`ansible/production_vars.yml`. The built-in `gmail` profile expands to exact
+Gmail and Google Workspace endpoints only:
+
+```yaml
+platform_optional_apps:
+  espocrm:
+    enabled: true
+    email_server_allowlist_profile: gmail
+```
+
+For another provider, use exact `host:port` pairs. Wildcards are rejected. Set
+either `email_server_allowlist_profile` or
+`email_server_allowed_address_list`, not both.
+
+For an already-running EspoCRM deployment, apply only email configuration:
+
+```bash
+ansible-playbook -K \
+  -i ansible/inventory.production.ini \
+  ansible/configure_espocrm_email.yml
+```
+
+The EspoCRM assistant is disabled by default and requires EspoCRM itself to be
+enabled. Turning on `platform_optional_apps.espocrm_assistant.enabled` does not
+turn on EspoCRM; the production playbook fails early if the assistant is enabled
+without EspoCRM.
+
+Required assistant shape:
+
+```yaml
+platform_optional_apps:
+  espocrm:
+    enabled: true
+  espocrm_assistant:
+    enabled: true
+
+platform_secrets:
+  espocrm_assistant_read_api_key: "CHANGE_ME"
+  espocrm_assistant_read_secret_key: ""
+  espocrm_assistant_write_api_key: "CHANGE_ME"
+  espocrm_assistant_write_secret_key: ""
+  espocrm_assistant_token: "CHANGE_ME"
+  espocrm_assistant_apply_token: "CHANGE_ME"
+```
+
+Use separate EspoCRM API users for read and write access. The read API user is
+used by assistant-visible MCP tools. The write API user is used only by the
+human-approved apply endpoint. The assistant has no public hostname and should
+not be internet-exposed directly.
+
+The assistant source, tests, Dockerfile, release workflow, and service-specific
+developer docs live in the dedicated service repository:
+`https://github.com/The-Keep-Studios/espocrm-assistant`. TKP consumes the
+published service image by immutable digest:
+
+```text
+ghcr.io/the-keep-studios/espocrm-assistant@sha256:aea7326a6df729feb94595740040aba184274d0f897fdd4ffcc5d8408df3e585
+```
+
+Optional app backup CronJobs:
+
+```text
+Twenty:  twenty/twenty-backup
+EspoCRM: espocrm/espocrm-backup
+```
+
+Validate backups before putting real business data into either CRM.
+
 ### Leantime Email
 
 Leantime SMTP settings live in ignored `ansible/production_vars.yml` under `platform_email.leantime`. The playbook creates the `leantime-email` Kubernetes Secret and restarts Leantime only when SMTP settings change.
 
-For production transactional mail, use Mailgun SMTP. Mailgun's Free plan currently includes 100 messages per day and one custom sending domain, which is enough for low-volume Leantime invitations and password resets.
+For production transactional mail, configure an SMTP provider such as Mailgun.
 
 Recommended shape:
 
@@ -612,11 +1044,8 @@ This is the backlog for moving from production-like to high availability:
 - Argo platform install: `kubernetes/platform/argocd/*`
 - Cloudflare Tunnel edge deployment: `kubernetes/platform/cloudflared/*`
 - GitOps apps/root: `kubernetes/gitops/*`
-- App support contract: `docs/app-support-contract.md`
-- Optional CRM and EspoCRM assistant operator config: `docs/optional-crm-apps.md`
 - Leantime backup CronJob: `kubernetes/apps/leantime/backup-cronjob.yaml`
 - Repository quality gate: `scripts/test-quality.sh`
-- Leantime UI/MCP route contract: `docs/leantime-mcp-routing.md`
 - Leantime UI/MCP route probe: `scripts/check-leantime-routing.sh`
 - Runtime env template: `scripts/production.env.example`
 - OIDC reconcile helper: `scripts/reconcile-oidc.sh`
