@@ -24,6 +24,30 @@ SECRET_KEY_RE = re.compile(r"^[A-Z0-9_]+$")
 ALLOWED_ENTITIES = {"Lead", "Opportunity", "Account", "Contact", "Task", "Email"}
 READONLY_ENTITIES = {"Email"}
 ALLOWED_ACTIONS = {"create", "update"}
+REQUIRED_UAT_WORKFLOWS = {
+    "cold_application_lead",
+    "recruiter_reply",
+    "ats_confirmation",
+    "rejected_onsite_role",
+}
+REQUIRED_REAL_UAT_EVIDENCE = {
+    "uat_date",
+    "environment_type",
+    "redacted_read_role_summary",
+    "redacted_write_apply_role_summary",
+    "dry_run_report_artifact",
+    "human_approval_checkpoint_artifact",
+    "audit_note_sample_redacted",
+    "created_or_updated_record_ids_redacted",
+    "operator_result",
+}
+FORBIDDEN_REAL_UAT_EVIDENCE = {
+    "api_keys",
+    "secret_values",
+    "real_job_search_data",
+    "private_hostnames",
+    "customer_records",
+}
 REQUIRED_TOP_LEVEL = {
     "contract_version",
     "purpose",
@@ -31,10 +55,13 @@ REQUIRED_TOP_LEVEL = {
     "source_boundary",
     "runtime_boundary",
     "secrets",
+    "least_privilege_roles",
     "allowed_entities",
     "write_policy",
     "fixtures",
     "dry_run_change_sets",
+    "fake_uat_checklist",
+    "future_real_uat_evidence_format",
 }
 BANNED_STRING_VALUES = {
     "gmail.com",
@@ -196,6 +223,93 @@ def validate_secret_refs(data: dict[str, Any]) -> None:
             fail(f"secrets.{name}.key must be an uppercase Kubernetes key.")
 
 
+def validate_least_privilege_roles(data: dict[str, Any]) -> None:
+    roles = require_mapping(data["least_privilege_roles"], "least_privilege_roles")
+    required_roles = {"read_role", "write_apply_role"}
+    missing = sorted(required_roles - set(roles))
+    if missing:
+        fail(f"least_privilege_roles is missing required roles: {', '.join(missing)}")
+
+    for role_key in required_roles:
+        role = require_mapping(roles[role_key], f"least_privilege_roles.{role_key}")
+        require_string(role.get("role_name"), f"least_privilege_roles.{role_key}.role_name")
+        require_bool(
+            role.get("admin_allowed"),
+            False,
+            f"least_privilege_roles.{role_key}.admin_allowed",
+        )
+        require_bool(
+            role.get("record_delete_allowed"),
+            False,
+            f"least_privilege_roles.{role_key}.record_delete_allowed",
+        )
+        require_bool(
+            role.get("browser_login_required"),
+            False,
+            f"least_privilege_roles.{role_key}.browser_login_required",
+        )
+        evidence = require_list(
+            role.get("evidence_required"),
+            f"least_privilege_roles.{role_key}.evidence_required",
+        )
+        for item in evidence:
+            require_string(item, f"least_privilege_roles.{role_key}.evidence_required item")
+
+        entity_permissions = require_mapping(
+            role.get("entities"),
+            f"least_privilege_roles.{role_key}.entities",
+        )
+        missing_entities = sorted(ALLOWED_ENTITIES - set(entity_permissions))
+        if missing_entities:
+            fail(
+                f"least_privilege_roles.{role_key}.entities is missing: "
+                f"{', '.join(missing_entities)}"
+            )
+        for entity_name in sorted(ALLOWED_ENTITIES):
+            permissions = require_mapping(
+                entity_permissions.get(entity_name),
+                f"least_privilege_roles.{role_key}.entities.{entity_name}",
+            )
+            require_bool(
+                permissions.get("read"),
+                True,
+                f"least_privilege_roles.{role_key}.entities.{entity_name}.read",
+            )
+            require_bool(
+                permissions.get("delete"),
+                False,
+                f"least_privilege_roles.{role_key}.entities.{entity_name}.delete",
+            )
+            if role_key == "read_role" or entity_name in READONLY_ENTITIES:
+                require_bool(
+                    permissions.get("create"),
+                    False,
+                    f"least_privilege_roles.{role_key}.entities.{entity_name}.create",
+                )
+                require_bool(
+                    permissions.get("update"),
+                    False,
+                    f"least_privilege_roles.{role_key}.entities.{entity_name}.update",
+                )
+            else:
+                require_bool(
+                    permissions.get("create"),
+                    True,
+                    f"least_privilege_roles.{role_key}.entities.{entity_name}.create",
+                )
+                require_bool(
+                    permissions.get("update"),
+                    True,
+                    f"least_privilege_roles.{role_key}.entities.{entity_name}.update",
+                )
+
+    require_bool(
+        roles["write_apply_role"].get("must_be_used_only_after_approval"),
+        True,
+        "least_privilege_roles.write_apply_role.must_be_used_only_after_approval",
+    )
+
+
 def validate_entities(data: dict[str, Any]) -> dict[str, dict[str, Any]]:
     entities: dict[str, dict[str, Any]] = {}
     for index, raw_entity in enumerate(require_list(data["allowed_entities"], "allowed_entities")):
@@ -251,27 +365,25 @@ def validate_write_policy(data: dict[str, Any]) -> None:
     require_dns_label(audit_ref, "write_policy.audit_log_ref")
 
 
-def validate_fixtures(data: dict[str, Any]) -> set[str]:
-    fixture_ids: set[str] = set()
-    allowed_workflows = {
-        "recruiter_outreach",
-        "ats_confirmation",
-        "cold_application_lead",
-    }
+def validate_fixtures(data: dict[str, Any]) -> dict[str, str]:
+    fixture_workflows: dict[str, str] = {}
     allowed_classifications = {
+        "reject",
         "lead",
         "priority_lead",
         "opportunity_candidate",
     }
+    seen_workflows: set[str] = set()
     for index, raw_fixture in enumerate(require_list(data["fixtures"], "fixtures")):
         fixture = require_mapping(raw_fixture, f"fixtures[{index}]")
         fixture_id = require_string(fixture.get("fixture_id"), f"fixtures[{index}].fixture_id")
-        if fixture_id in fixture_ids:
+        if fixture_id in fixture_workflows:
             fail(f"Duplicate fixture_id: {fixture_id}")
-        fixture_ids.add(fixture_id)
         workflow = require_string(fixture.get("workflow"), f"fixtures[{index}].workflow")
-        if workflow not in allowed_workflows:
+        if workflow not in REQUIRED_UAT_WORKFLOWS:
             fail(f"Unsupported fixture workflow: {workflow}")
+        fixture_workflows[fixture_id] = workflow
+        seen_workflows.add(workflow)
         classification = require_string(
             fixture.get("classification"), f"fixtures[{index}].classification"
         )
@@ -288,14 +400,18 @@ def validate_fixtures(data: dict[str, Any]) -> set[str]:
         require_bool(fixture.get("approval_needed"), True, f"fixtures[{index}].approval_needed")
         if not isinstance(fixture.get("reciprocal_signal"), bool):
             fail(f"fixtures[{index}].reciprocal_signal must be boolean.")
-    return fixture_ids
+    missing_workflows = sorted(REQUIRED_UAT_WORKFLOWS - seen_workflows)
+    if missing_workflows:
+        fail(f"fixtures are missing required workflows: {', '.join(missing_workflows)}")
+    return fixture_workflows
 
 
 def validate_change_sets(
     data: dict[str, Any],
-    fixture_ids: set[str],
+    fixture_workflows: dict[str, str],
     entities: dict[str, dict[str, Any]],
 ) -> None:
+    seen_workflows: set[str] = set()
     for index, raw_change_set in enumerate(
         require_list(data["dry_run_change_sets"], "dry_run_change_sets")
     ):
@@ -308,8 +424,18 @@ def validate_change_sets(
             change_set.get("source_fixture_id"),
             f"dry_run_change_sets[{index}].source_fixture_id",
         )
-        if source_fixture_id not in fixture_ids:
+        if source_fixture_id not in fixture_workflows:
             fail(f"Unknown source_fixture_id: {source_fixture_id}")
+        workflow = require_string(
+            change_set.get("workflow"),
+            f"dry_run_change_sets[{index}].workflow",
+        )
+        if workflow != fixture_workflows[source_fixture_id]:
+            fail(
+                f"dry_run_change_sets[{index}].workflow must match "
+                f"{source_fixture_id}."
+            )
+        seen_workflows.add(workflow)
         require_bool(change_set.get("dry_run"), True, f"dry_run_change_sets[{index}].dry_run")
         require_bool(
             change_set.get("approval_required"),
@@ -338,13 +464,83 @@ def validate_change_sets(
             if change.get("human_approval_gate") != "required":
                 fail(f"{context}.human_approval_gate must be required.")
             require_bool(change.get("no_delete"), True, f"{context}.no_delete")
-            require_string(change.get("source_attribution"), f"{context}.source_attribution")
-            require_string(change.get("audit_note"), f"{context}.audit_note")
+            source_attribution = require_string(
+                change.get("source_attribution"),
+                f"{context}.source_attribution",
+            )
+            if source_attribution != source_fixture_id:
+                fail(f"{context}.source_attribution must match source_fixture_id.")
+            audit_note = require_string(change.get("audit_note"), f"{context}.audit_note")
+            if "assistant-originated" not in audit_note.lower():
+                fail(f"{context}.audit_note must identify assistant-originated changes.")
+            if "dry run" not in audit_note.lower():
+                fail(f"{context}.audit_note must identify dry-run behavior.")
             fields = require_mapping(change.get("fields"), f"{context}.fields")
             allowed_fields = set(entities[entity_name]["allowed_fields"])
             for field in fields:
                 if field not in allowed_fields:
                     fail(f"{context}.fields.{field} is not allowed for {entity_name}.")
+    missing_workflows = sorted(REQUIRED_UAT_WORKFLOWS - seen_workflows)
+    if missing_workflows:
+        fail(f"dry_run_change_sets are missing workflows: {', '.join(missing_workflows)}")
+
+
+def validate_uat_checklist(data: dict[str, Any]) -> None:
+    checkpoints = require_list(data["fake_uat_checklist"], "fake_uat_checklist")
+    approval_checkpoint_seen = False
+    for index, raw_checkpoint in enumerate(checkpoints):
+        checkpoint = require_mapping(raw_checkpoint, f"fake_uat_checklist[{index}]")
+        require_string(checkpoint.get("step_id"), f"fake_uat_checklist[{index}].step_id")
+        require_string(
+            checkpoint.get("checkpoint"),
+            f"fake_uat_checklist[{index}].checkpoint",
+        )
+        require_string(
+            checkpoint.get("expected_result"),
+            f"fake_uat_checklist[{index}].expected_result",
+        )
+        approval_required = checkpoint.get("requires_human_approval_before_write")
+        if not isinstance(approval_required, bool):
+            fail(
+                "fake_uat_checklist"
+                f"[{index}].requires_human_approval_before_write must be boolean."
+            )
+        approval_checkpoint_seen = approval_checkpoint_seen or approval_required
+    if not approval_checkpoint_seen:
+        fail("fake_uat_checklist must include a human approval checkpoint before writes.")
+
+
+def validate_real_uat_evidence_format(data: dict[str, Any]) -> None:
+    evidence = require_mapping(
+        data["future_real_uat_evidence_format"],
+        "future_real_uat_evidence_format",
+    )
+    for field in ("real_credentials_required", "fake_data_first", "redact_secrets", "redact_private_records"):
+        require_bool(evidence.get(field), True, f"future_real_uat_evidence_format.{field}")
+    required_evidence = set(
+        require_list(
+            evidence.get("required_evidence"),
+            "future_real_uat_evidence_format.required_evidence",
+        )
+    )
+    missing_required = sorted(REQUIRED_REAL_UAT_EVIDENCE - required_evidence)
+    if missing_required:
+        fail(
+            "future_real_uat_evidence_format.required_evidence is missing: "
+            f"{', '.join(missing_required)}"
+        )
+    forbidden_evidence = set(
+        require_list(
+            evidence.get("forbidden_evidence"),
+            "future_real_uat_evidence_format.forbidden_evidence",
+        )
+    )
+    missing_forbidden = sorted(FORBIDDEN_REAL_UAT_EVIDENCE - forbidden_evidence)
+    if missing_forbidden:
+        fail(
+            "future_real_uat_evidence_format.forbidden_evidence is missing: "
+            f"{', '.join(missing_forbidden)}"
+        )
 
 
 def validate_doc_links() -> None:
@@ -363,10 +559,13 @@ def validate_contract(data: dict[str, Any]) -> None:
     validate_source_boundary(data)
     validate_runtime_boundary(data)
     validate_secret_refs(data)
+    validate_least_privilege_roles(data)
     entities = validate_entities(data)
     validate_write_policy(data)
-    fixture_ids = validate_fixtures(data)
-    validate_change_sets(data, fixture_ids, entities)
+    fixture_workflows = validate_fixtures(data)
+    validate_change_sets(data, fixture_workflows, entities)
+    validate_uat_checklist(data)
+    validate_real_uat_evidence_format(data)
 
 
 def expect_failure(label: str, data: dict[str, Any]) -> None:
@@ -393,6 +592,23 @@ def run_negative_checks(valid_data: dict[str, Any]) -> None:
     public_exposure = copy.deepcopy(valid_data)
     public_exposure["runtime_boundary"]["public_exposure"] = "internet"
     expect_failure("public exposure", public_exposure)
+
+    read_role_can_write = copy.deepcopy(valid_data)
+    read_role_can_write["least_privilege_roles"]["read_role"]["entities"]["Lead"]["update"] = True
+    expect_failure("read role can write", read_role_can_write)
+
+    missing_uat_workflow = copy.deepcopy(valid_data)
+    missing_uat_workflow["dry_run_change_sets"] = [
+        change_set
+        for change_set in missing_uat_workflow["dry_run_change_sets"]
+        if change_set["workflow"] != "rejected_onsite_role"
+    ]
+    expect_failure("missing UAT workflow change set", missing_uat_workflow)
+
+    missing_approval_checkpoint = copy.deepcopy(valid_data)
+    for checkpoint in missing_approval_checkpoint["fake_uat_checklist"]:
+        checkpoint["requires_human_approval_before_write"] = False
+    expect_failure("missing approval checkpoint", missing_approval_checkpoint)
 
 
 def main() -> None:

@@ -38,6 +38,108 @@
       "purpose": "Approval/apply token reference, never a literal token value."
     }
   },
+  "least_privilege_roles": {
+    "read_role": {
+      "role_name": "assistant-readonly-example",
+      "admin_allowed": false,
+      "record_delete_allowed": false,
+      "browser_login_required": false,
+      "entities": {
+        "Lead": {
+          "read": true,
+          "create": false,
+          "update": false,
+          "delete": false
+        },
+        "Opportunity": {
+          "read": true,
+          "create": false,
+          "update": false,
+          "delete": false
+        },
+        "Account": {
+          "read": true,
+          "create": false,
+          "update": false,
+          "delete": false
+        },
+        "Contact": {
+          "read": true,
+          "create": false,
+          "update": false,
+          "delete": false
+        },
+        "Task": {
+          "read": true,
+          "create": false,
+          "update": false,
+          "delete": false
+        },
+        "Email": {
+          "read": true,
+          "create": false,
+          "update": false,
+          "delete": false
+        }
+      },
+      "evidence_required": [
+        "redacted-role-summary",
+        "read-search-succeeds",
+        "create-update-delete-denied"
+      ]
+    },
+    "write_apply_role": {
+      "role_name": "assistant-approved-apply-example",
+      "admin_allowed": false,
+      "record_delete_allowed": false,
+      "browser_login_required": false,
+      "must_be_used_only_after_approval": true,
+      "entities": {
+        "Lead": {
+          "read": true,
+          "create": true,
+          "update": true,
+          "delete": false
+        },
+        "Opportunity": {
+          "read": true,
+          "create": true,
+          "update": true,
+          "delete": false
+        },
+        "Account": {
+          "read": true,
+          "create": true,
+          "update": true,
+          "delete": false
+        },
+        "Contact": {
+          "read": true,
+          "create": true,
+          "update": true,
+          "delete": false
+        },
+        "Task": {
+          "read": true,
+          "create": true,
+          "update": true,
+          "delete": false
+        },
+        "Email": {
+          "read": true,
+          "create": false,
+          "update": false,
+          "delete": false
+        }
+      },
+      "evidence_required": [
+        "redacted-role-summary",
+        "approved-create-update-succeeds",
+        "delete-denied",
+        "unapproved-apply-denied"
+      ]
+    }
+  },
   "allowed_entities": [
     {
       "entity": "Lead",
@@ -170,7 +272,7 @@
   "fixtures": [
     {
       "fixture_id": "fixture-recruiter-outreach",
-      "workflow": "recruiter_outreach",
+      "workflow": "recruiter_reply",
       "source": {
         "kind": "email",
         "sender": "recruiter@example.test",
@@ -209,13 +311,27 @@
       "next_action": "Draft a tailored application packet for human approval.",
       "approval_needed": true,
       "reciprocal_signal": false
+    },
+    {
+      "fixture_id": "fixture-rejected-onsite-role",
+      "workflow": "rejected_onsite_role",
+      "source": {
+        "kind": "job_board",
+        "sender": "jobs@example.test",
+        "subject": "Local onsite support role",
+        "received_at": "2026-06-04T11:45:00Z"
+      },
+      "classification": "reject",
+      "next_action": "Prepare a no-pursue record update only if a human wants the rejection retained in CRM.",
+      "approval_needed": true,
+      "reciprocal_signal": false
     }
   ],
   "dry_run_change_sets": [
     {
       "change_set_id": "dryrun-recruiter-outreach-001",
       "source_fixture_id": "fixture-recruiter-outreach",
-      "workflow": "recruiter_outreach",
+      "workflow": "recruiter_reply",
       "dry_run": true,
       "approval_required": true,
       "delete_allowed": false,
@@ -257,6 +373,50 @@
       ]
     },
     {
+      "change_set_id": "dryrun-cold-application-001",
+      "source_fixture_id": "fixture-cold-application-lead",
+      "workflow": "cold_application_lead",
+      "dry_run": true,
+      "approval_required": true,
+      "delete_allowed": false,
+      "changes": [
+        {
+          "change_id": "change-lead-cold-application",
+          "action": "create",
+          "entity": "Lead",
+          "human_approval_gate": "required",
+          "no_delete": true,
+          "source_attribution": "fixture-cold-application-lead",
+          "audit_note": "Assistant-originated dry run for cold application lead fixture.",
+          "fields": {
+            "name": "Founding automation consultant - Example Systems",
+            "accountName": "Example Systems",
+            "emailAddress": "jobs@example.test",
+            "status": "New",
+            "source": "Job Board",
+            "description": "Fake cold application lead fixture. Keep as Lead until reciprocal human signal or explicit human override exists."
+          }
+        },
+        {
+          "change_id": "change-task-cold-application-review",
+          "action": "create",
+          "entity": "Task",
+          "human_approval_gate": "required",
+          "no_delete": true,
+          "source_attribution": "fixture-cold-application-lead",
+          "audit_note": "Assistant-originated dry run for cold application review task.",
+          "fields": {
+            "name": "Review tailored application packet",
+            "status": "Not Started",
+            "priority": "Normal",
+            "parentType": "Lead",
+            "parentName": "Founding automation consultant - Example Systems",
+            "description": "No auto-apply. Human must approve any application or outbound message."
+          }
+        }
+      ]
+    },
+    {
       "change_set_id": "dryrun-ats-confirmation-001",
       "source_fixture_id": "fixture-ats-confirmation",
       "workflow": "ats_confirmation",
@@ -283,6 +443,83 @@
           }
         }
       ]
+    },
+    {
+      "change_set_id": "dryrun-rejected-onsite-role-001",
+      "source_fixture_id": "fixture-rejected-onsite-role",
+      "workflow": "rejected_onsite_role",
+      "dry_run": true,
+      "approval_required": true,
+      "delete_allowed": false,
+      "changes": [
+        {
+          "change_id": "change-lead-rejected-onsite-role",
+          "action": "create",
+          "entity": "Lead",
+          "human_approval_gate": "required",
+          "no_delete": true,
+          "source_attribution": "fixture-rejected-onsite-role",
+          "audit_note": "Assistant-originated dry run for rejected onsite role fixture.",
+          "fields": {
+            "name": "Onsite support role - Example Retail Group",
+            "accountName": "Example Retail Group",
+            "emailAddress": "jobs@example.test",
+            "status": "Dead",
+            "source": "Job Board",
+            "description": "Fake rejected onsite role fixture. Mark no-pursue because onsite-only and low-fit signals are present; do not delete."
+          }
+        }
+      ]
     }
-  ]
+  ],
+  "fake_uat_checklist": [
+    {
+      "step_id": "uat-001",
+      "checkpoint": "load-fake-fixtures",
+      "expected_result": "Validator loads only fake example.test and example fixture values.",
+      "requires_human_approval_before_write": false
+    },
+    {
+      "step_id": "uat-002",
+      "checkpoint": "prepare-dry-run-report",
+      "expected_result": "Each required workflow emits a dry-run change set with source attribution and no delete action.",
+      "requires_human_approval_before_write": false
+    },
+    {
+      "step_id": "uat-003",
+      "checkpoint": "review-approval-screen",
+      "expected_result": "Human approval is required before the approved apply path can use write credentials.",
+      "requires_human_approval_before_write": true
+    },
+    {
+      "step_id": "uat-004",
+      "checkpoint": "verify-audit-note",
+      "expected_result": "Every proposed create or update includes an assistant-originated audit note and source fixture reference.",
+      "requires_human_approval_before_write": true
+    }
+  ],
+  "future_real_uat_evidence_format": {
+    "real_credentials_required": true,
+    "fake_data_first": true,
+    "redact_secrets": true,
+    "redact_private_records": true,
+    "required_evidence": [
+      "uat_date",
+      "environment_type",
+      "redacted_read_role_summary",
+      "redacted_write_apply_role_summary",
+      "dry_run_report_artifact",
+      "human_approval_checkpoint_artifact",
+      "audit_note_sample_redacted",
+      "created_or_updated_record_ids_redacted",
+      "operator_result"
+    ],
+    "forbidden_evidence": [
+      "api_keys",
+      "secret_values",
+      "real_job_search_data",
+      "private_hostnames",
+      "customer_records"
+    ]
+  }
 }

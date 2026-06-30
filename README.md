@@ -1007,6 +1007,15 @@ It does not close #28; real least-privilege role evidence and UAT against
 non-production-safe EspoCRM data are still required before the parent feature is
 complete.
 
+The fake contract also carries the first repeatable UAT slice for #28. It
+defines read-only and approved-apply role requirements, dry-run change sets for
+cold application leads, recruiter replies with reciprocal signal, ATS
+confirmations, and rejected onsite roles, plus the future real-UAT evidence
+format. Future evidence should be redacted and include role summaries, dry-run
+artifacts, the human approval checkpoint, audit-note samples, and operator
+results. Do not include API keys, real job-search data, private hostnames, or
+customer records.
+
 Optional app backup CronJobs:
 
 ```text
