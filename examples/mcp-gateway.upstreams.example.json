@@ -1,0 +1,67 @@
+{
+  "registry_version": "2026-06-30.fake.v1",
+  "default_policy": "deny",
+  "gateway_is_generic_http_proxy": false,
+  "audit_log_required": true,
+  "secret_logging_allowed": false,
+  "upstreams": [
+    {
+      "upstream_id": "fake-leantime",
+      "display_name": "Fake Leantime MCP upstream",
+      "mcp_endpoint": "https://leantime-mcp.example.invalid/mcp",
+      "transport": "streamable-http",
+      "credential_secret_ref": {
+        "name": "mcp-gateway-fake-leantime",
+        "key": "LEANTIME_MCP_TOKEN"
+      },
+      "allowed_subjects": [
+        "group:platform-operators"
+      ],
+      "tool_policy": {
+        "unknown_tools": "deny",
+        "read_scope": "mcp:read",
+        "write_scope": "mcp:write:approved"
+      },
+      "tools": [
+        {
+          "name": "leantime.projects.list",
+          "mode": "read",
+          "approval_required": false,
+          "allowed": true,
+          "audit": true
+        },
+        {
+          "name": "leantime.tasks.list",
+          "mode": "read",
+          "approval_required": false,
+          "allowed": true,
+          "audit": true
+        },
+        {
+          "name": "leantime.tasks.create",
+          "mode": "write",
+          "approval_required": true,
+          "allowed": true,
+          "audit": true
+        },
+        {
+          "name": "leantime.tasks.update",
+          "mode": "write",
+          "approval_required": true,
+          "allowed": true,
+          "audit": true
+        }
+      ],
+      "blocked_tool_examples": [
+        "leantime.raw.http_request",
+        "leantime.admin.delete_project"
+      ],
+      "limits": {
+        "request_timeout_seconds": 30,
+        "max_request_bytes": 65536,
+        "max_response_bytes": 1048576,
+        "rate_limit_per_minute": 60
+      }
+    }
+  ]
+}

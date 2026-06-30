@@ -855,6 +855,31 @@ privileged automation interface: require a personal access token or scoped API
 credential for every client, use HTTPS, retain Cloudflare/Traefik request
 limits, and restrict accepted origins where the plugin supports it.
 
+### MCP Gateway Preflight Contract
+
+The fake MCP gateway preflight artifacts for #54 define the metadata and policy
+shape TKP expects before a real gateway service exists:
+
+- `examples/mcp-gateway.protected-resource.example.json`
+- `examples/mcp-gateway.authorization-server.example.json`
+- `examples/mcp-gateway.upstreams.example.json`
+
+The initial fake upstream is Leantime, but the contract is gateway-shaped rather
+than Leantime-specific. It requires fake `.example.invalid` metadata URLs,
+secret references by name only, default-deny unknown tools, approval-required
+write tools, audit logging, request limits, and `gateway_is_generic_http_proxy:
+false`.
+
+Validate the preflight contract:
+
+```bash
+python3 scripts/test-mcp-gateway-contract.py
+```
+
+This advances #54, with #20, #23, and #28 as related safety context. It does
+not deploy a gateway, expose upstream MCP directly, create OAuth clients, or
+close #54.
+
 ### Optional CRM And Assistant
 
 Baserow remains the core relationship-management app. Twenty and EspoCRM are
