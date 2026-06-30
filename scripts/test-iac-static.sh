@@ -44,6 +44,12 @@ scripts/test-local-prereqs.sh
 log "Synthetic demo data checks"
 scripts/test-demo-data.sh
 
+log "Host disk pressure check smoke"
+HOST_DISK_MIN_FREE_GIB=0 \
+HOST_DISK_MAX_USED_PERCENT=100 \
+HOST_DISK_KUBERNETES_MODE=skip \
+  scripts/check-host-disk-pressure.sh
+
 log "Kustomize render check"
 while IFS= read -r kustomization; do
   dir="$(dirname "${kustomization}")"

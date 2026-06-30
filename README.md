@@ -1004,6 +1004,33 @@ Migration safety:
 - Most GitOps app definitions use `prune: false` to reduce accidental deletion risk during migration. The Loki app enables pruning because chart migration requires stale resource cleanup.
 - `bootstrap-production.sh` is removed. Day-2 changes happen through Git and Argo CD.
 
+### Host Disk Pressure Check
+
+Run the read-only host disk check before or during cluster triage:
+
+```bash
+scripts/check-host-disk-pressure.sh
+```
+
+The check reports filesystem free space, filesystem usage percentage, and
+Kubernetes node `DiskPressure` when `kubectl` can reach a cluster. It does not
+delete snapshots, prune images, or change Kubernetes state.
+
+Useful overrides:
+
+```bash
+HOST_DISK_MIN_FREE_GIB=40 scripts/check-host-disk-pressure.sh
+HOST_DISK_MAX_USED_PERCENT=80 scripts/check-host-disk-pressure.sh
+HOST_DISK_CHECK_PATHS="/ /var/lib/rancher" scripts/check-host-disk-pressure.sh
+HOST_DISK_KUBERNETES_MODE=require scripts/check-host-disk-pressure.sh
+```
+
+For snapshot tools such as Timeshift, keep retention conservative enough that
+normal platform operation cannot silently fill the host disk. Prefer a small
+number of scheduled snapshots, delete old snapshots manually after confirming a
+new restore point exists, and do not remove Kubernetes data, database files, or
+backup artifacts while workloads are unhealthy.
+
 ### Destructive Operations Policy
 
 `teardown-cluster.sh` is demo/lab only.
