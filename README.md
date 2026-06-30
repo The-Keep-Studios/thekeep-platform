@@ -562,7 +562,7 @@ The Ansible controller does not need to be the k3s control-plane host. The produ
 
 ```ini
 [k3s_control_plane]
-framework-desktop ansible_host=192.168.0.46 ansible_user=iantsmall
+k3s-control-plane ansible_host=192.0.2.10 ansible_user=platform-admin
 
 [k3s_control_plane:vars]
 ansible_connection=ssh
