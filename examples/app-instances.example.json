@@ -49,6 +49,38 @@
         "schedule": "29 3 * * *",
         "retention": "14d"
       }
+    },
+    {
+      "app_type": "dmarc-monitor",
+      "instance_name": "example-client-dmarc",
+      "namespace": "example-client-dmarc",
+      "hostname": "dmarc.example-client.invalid",
+      "access_policy": "internal-authenticated",
+      "exposure": {
+        "public_ingress": true,
+        "cloudflare_tunnel_route": true
+      },
+      "storage": {
+        "pvc_prefix": "example-client-dmarc",
+        "database_binding": "example-client-dmarc-db"
+      },
+      "secrets": {
+        "mailbox_secret_ref": "example-client-dmarc-mailbox-secret",
+        "report_ingestion_secret_ref": "example-client-dmarc-report-ingestion-secret",
+        "oidc_secret_ref": "example-client-dmarc-oidc-secret"
+      },
+      "report_ingestion": {
+        "aggregate_reports_only": true,
+        "forensic_reports_enabled": false,
+        "private_domain_config_required": true,
+        "raw_report_storage": "example-client-dmarc-raw-reports",
+        "dns_mutation_allowed": false
+      },
+      "backups": {
+        "enabled": true,
+        "schedule": "43 3 * * *",
+        "retention": "90d"
+      }
     }
   ]
 }
