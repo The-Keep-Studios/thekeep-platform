@@ -121,6 +121,10 @@ python3 "${SCRIPT_DIR}/test-app-instance-examples.py"
 log "EspoCRM assistant contract checks"
 python3 "${SCRIPT_DIR}/test-espocrm-assistant-contract.py"
 
+log "MCP gateway fixture checks"
+python3 "${SCRIPT_DIR}/test-mcp-gateway-contract.py"
+python3 "${SCRIPT_DIR}/run-mcp-gateway-fixture.py" --self-test
+
 log "Optional traditional linters"
 run_optional_linters
 

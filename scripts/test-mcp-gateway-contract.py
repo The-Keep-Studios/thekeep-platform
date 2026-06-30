@@ -326,6 +326,7 @@ def validate_doc_links() -> None:
         "examples/mcp-gateway.authorization-server.example.json",
         "examples/mcp-gateway.upstreams.example.json",
         "scripts/test-mcp-gateway-contract.py",
+        "scripts/run-mcp-gateway-fixture.py",
     ):
         if required not in readme:
             fail(f"{README_PATH} must reference {required}.")
