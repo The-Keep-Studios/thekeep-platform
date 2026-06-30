@@ -1,0 +1,60 @@
+{
+  "fixture_version": "2026-06-30.fake.v1",
+  "source_name": "fake-job-source",
+  "provider_contract": {
+    "default_provider": "fake-deterministic",
+    "hosted_api_keys_required": false,
+    "network_calls_by_default": false,
+    "writes_allowed": false,
+    "approval_required_for_external_actions": true
+  },
+  "items": [
+    {
+      "item_id": "fake-job-001",
+      "source": "example-job-board",
+      "received_at": "2026-06-04T10:30:00Z",
+      "company": "Example Robotics",
+      "role": "Platform Automation Engineer",
+      "description": "Remote role focused on self-hosted workflow automation, Linux operations, and internal platform reliability.",
+      "contact": "jobs@example.test",
+      "signals": [
+        "remote",
+        "automation",
+        "platform"
+      ],
+      "risk_flags": []
+    },
+    {
+      "item_id": "fake-job-002",
+      "source": "example-recruiter-email",
+      "received_at": "2026-06-05T14:45:00Z",
+      "company": "Example Systems",
+      "role": "Fractional AI Operations Lead",
+      "description": "Recruiter asked for availability to discuss a part-time internal automation and AI operations engagement.",
+      "contact": "recruiter@example.test",
+      "signals": [
+        "remote",
+        "automation",
+        "human_reply",
+        "consulting"
+      ],
+      "risk_flags": []
+    },
+    {
+      "item_id": "fake-job-003",
+      "source": "example-community-board",
+      "received_at": "2026-06-06T08:10:00Z",
+      "company": "Example Retail Group",
+      "role": "Onsite Helpdesk Analyst",
+      "description": "Local onsite support role with no automation scope and no remote option.",
+      "contact": "ops@example.test",
+      "signals": [
+        "operations"
+      ],
+      "risk_flags": [
+        "onsite_only",
+        "low_fit"
+      ]
+    }
+  ]
+}

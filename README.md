@@ -295,6 +295,25 @@ Before opening an app-support PR, include relevant evidence:
 - Human and AI contributors should challenge requests when the proposed implementation does not match the actual goal or creates avoidable operational burden.
 - Prefer reviewable files, dry runs, and copy/paste commands over hidden automation for one-time operations.
 
+### Local Automation Fixture
+
+`scripts/run-automation-fixture.py` is the first local-only automation scaffold
+for #15 and #28. It reads fake job-source data from
+`examples/automation-job-source.fixture.json` and emits deterministic Markdown
+with source, classification, summary, next action, and an approval-needed
+marker. The default provider is fake and requires no hosted API key, no network
+access, and no real Gmail, EspoCRM, Leantime, client, or production data.
+
+```bash
+python3 scripts/run-automation-fixture.py \
+  --fixture examples/automation-job-source.fixture.json
+```
+
+Use `--provider local-auto` to detect supported local model CLIs without making
+model calls. If no local provider command is present, the runner reports the
+skip and still uses the deterministic fake provider. Use `--self-test` to verify
+that fixtures with missing required fields fail validation.
+
 ### TODO Tracking Standard
 
 Use GitHub as the durable TODO system. Do not rely on private chat memory, local notes, unchecked code comments, or stale PR prose for work that must survive a handoff.
