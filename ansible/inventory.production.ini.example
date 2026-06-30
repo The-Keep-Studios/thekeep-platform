@@ -1,6 +1,6 @@
 [k3s_control_plane]
 # Example:
-# framework13 ansible_host=192.168.1.50 ansible_user=iantsmall
+# k3s-control-plane ansible_host=192.0.2.10 ansible_user=platform-admin
 
 [k3s_control_plane:vars]
 ansible_connection=ssh
