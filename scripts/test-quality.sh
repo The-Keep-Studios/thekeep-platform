@@ -118,6 +118,15 @@ log "Baseline static checks"
 log "App-instance example checks"
 python3 "${SCRIPT_DIR}/test-app-instance-examples.py"
 
+log "Local automation fixture checks"
+automation_json="$(mktemp "${TMPDIR:-/tmp}/thekeep-automation.XXXXXX.json")"
+trap 'rm -f "${automation_json}"' EXIT
+python3 "${SCRIPT_DIR}/run-automation-fixture.py" \
+  --fixture "${PROJECT_ROOT}/examples/automation-job-source.fixture.json" \
+  --json-output "${automation_json}" \
+  --self-test >/dev/null
+python3 -m json.tool "${automation_json}" >/dev/null
+
 log "EspoCRM assistant contract checks"
 python3 "${SCRIPT_DIR}/test-espocrm-assistant-contract.py"
 
