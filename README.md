@@ -876,9 +876,17 @@ Validate the preflight contract:
 python3 scripts/test-mcp-gateway-contract.py
 ```
 
+Run the local fake gateway policy simulation:
+
+```bash
+python3 scripts/run-mcp-gateway-fixture.py --self-test
+python3 scripts/run-mcp-gateway-fixture.py --list-tools
+python3 scripts/run-mcp-gateway-fixture.py --tool leantime.projects.list
+```
+
 This advances #54, with #20, #23, and #28 as related safety context. It does
-not deploy a gateway, expose upstream MCP directly, create OAuth clients, or
-close #54.
+not deploy a gateway, expose upstream MCP directly, create OAuth clients, call a
+real upstream, or close #54.
 
 ### Optional CRM And Assistant
 
