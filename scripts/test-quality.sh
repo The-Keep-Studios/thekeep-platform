@@ -118,6 +118,11 @@ log "Baseline static checks"
 log "App-instance example checks"
 python3 "${SCRIPT_DIR}/test-app-instance-examples.py"
 
+log "Local automation fixture checks"
+python3 "${SCRIPT_DIR}/run-automation-fixture.py" \
+  --fixture "${PROJECT_ROOT}/examples/automation-job-source.fixture.json" \
+  --self-test >/dev/null
+
 log "EspoCRM assistant contract checks"
 python3 "${SCRIPT_DIR}/test-espocrm-assistant-contract.py"
 

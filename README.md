@@ -300,9 +300,12 @@ Before opening an app-support PR, include relevant evidence:
 `scripts/run-automation-fixture.py` is the first local-only automation scaffold
 for #15 and #28. It reads fake job-source data from
 `examples/automation-job-source.fixture.json` and emits deterministic Markdown
-with source, classification, summary, next action, and an approval-needed
-marker. The default provider is fake and requires no hosted API key, no network
-access, and no real Gmail, EspoCRM, Leantime, client, or production data.
+with source attribution, lead/opportunity classification, recommended CRM
+action, summary, next action, and an approval-required marker. The current fake
+intake workflow covers a job lead, recruiter email, and application
+confirmation. The default provider is fake and requires no hosted API key, no
+network access, and no real Gmail, EspoCRM, Leantime, client, or production
+data.
 
 ```bash
 python3 scripts/run-automation-fixture.py \

@@ -24,6 +24,7 @@ REQUIRED_TOP_LEVEL = {
 }
 REQUIRED_ITEM_FIELDS = {
     "item_id",
+    "source_kind",
     "source",
     "received_at",
     "company",
@@ -32,6 +33,14 @@ REQUIRED_ITEM_FIELDS = {
     "contact",
     "signals",
     "risk_flags",
+}
+REQUIRED_SOURCE_KINDS = {
+    "application_confirmation",
+    "job_lead",
+    "recruiter_email",
+}
+ALLOWED_SOURCE_KINDS = REQUIRED_SOURCE_KINDS | {
+    "community_board",
 }
 BANNED_FIXTURE_MARKERS = {
     "gmail.com",
@@ -59,13 +68,17 @@ class ProviderStatus:
 @dataclass(frozen=True)
 class AutomationResult:
     item_id: str
+    source_kind: str
     source: str
     company: str
     role: str
-    classification: str
+    triage: str
+    crm_classification: str
+    recommended_crm_action: str
     summary: str
     next_action: str
-    approval_needed: bool
+    approval_required: bool
+    source_attribution: str
 
 
 def fail(message: str) -> None:
@@ -172,6 +185,7 @@ def validate_fixture(data: dict[str, Any]) -> None:
         fail("items must be a non-empty list.")
 
     seen_ids: set[str] = set()
+    seen_source_kinds: set[str] = set()
     for index, raw_item in enumerate(items):
         item = require_mapping(raw_item, f"items[{index}]")
         missing_item = sorted(REQUIRED_ITEM_FIELDS - set(item))
@@ -181,6 +195,10 @@ def validate_fixture(data: dict[str, Any]) -> None:
         if item_id in seen_ids:
             fail(f"items[{index}].item_id must be unique: {item_id}")
         seen_ids.add(item_id)
+        source_kind = require_string(item["source_kind"], f"items[{index}].source_kind")
+        if source_kind not in ALLOWED_SOURCE_KINDS:
+            fail(f"items[{index}].source_kind is unsupported: {source_kind}")
+        seen_source_kinds.add(source_kind)
         for field in ("source", "received_at", "company", "role", "description"):
             require_string(item[field], f"items[{index}].{field}")
         contact = require_string(item["contact"], f"items[{index}].contact")
@@ -189,6 +207,10 @@ def validate_fixture(data: dict[str, Any]) -> None:
             fail(f"items[{index}].contact must use example.test: {contact}")
         require_string_list(item["signals"], f"items[{index}].signals")
         require_string_list(item["risk_flags"], f"items[{index}].risk_flags")
+
+    missing_source_kinds = sorted(REQUIRED_SOURCE_KINDS - seen_source_kinds)
+    if missing_source_kinds:
+        fail(f"Fixture is missing required fake intake inputs: {', '.join(missing_source_kinds)}")
 
 
 def provider_status(mode: str) -> ProviderStatus:
@@ -213,30 +235,47 @@ def provider_status(mode: str) -> ProviderStatus:
     )
 
 
-def classify_item(item: dict[str, Any]) -> tuple[str, str, bool]:
+def classify_item(item: dict[str, Any]) -> tuple[str, str, str, str, bool]:
+    source_kind = require_string(item["source_kind"], "source_kind")
     signals = set(require_string_list(item["signals"], "signals"))
     risk_flags = set(require_string_list(item["risk_flags"], "risk_flags"))
 
     if {"onsite_only", "low_fit"} & risk_flags:
         return (
             "reject",
+            "lead",
+            "no_crm_write",
             "Do not pursue; keep only the read-only fixture summary.",
             False,
+        )
+    if source_kind == "application_confirmation":
+        return (
+            "confirmation",
+            "lead",
+            "update_lead_application_confirmed",
+            "Update the matching Lead with confirmation evidence after approval.",
+            True,
         )
     if "human_reply" in signals:
         return (
             "opportunity_candidate",
+            "opportunity_candidate",
+            "prepare_opportunity_after_approval",
             "Prepare follow-up questions and require human approval before any outreach or CRM write.",
             True,
         )
     if "remote" in signals and ({"automation", "platform", "consulting"} & signals):
         return (
             "priority_lead",
+            "lead",
+            "create_priority_lead",
             "Draft a tailored application packet for human review.",
             True,
         )
     return (
         "lead",
+        "lead",
+        "create_lead",
         "Add to the review queue and wait for human prioritization.",
         True,
     )
@@ -245,21 +284,35 @@ def classify_item(item: dict[str, Any]) -> tuple[str, str, bool]:
 def run_automation(data: dict[str, Any]) -> list[AutomationResult]:
     results: list[AutomationResult] = []
     for item in data["items"]:
-        classification, next_action, approval_needed = classify_item(item)
+        (
+            triage,
+            crm_classification,
+            recommended_crm_action,
+            next_action,
+            approval_required,
+        ) = classify_item(item)
         summary = (
             f"{item['company']} - {item['role']}: "
             f"{item['description']}"
         )
+        source_attribution = (
+            f"{item['source_kind']} from {item['source']} received "
+            f"{item['received_at']} via {item['contact']}"
+        )
         results.append(
             AutomationResult(
                 item_id=item["item_id"],
+                source_kind=item["source_kind"],
                 source=item["source"],
                 company=item["company"],
                 role=item["role"],
-                classification=classification,
+                triage=triage,
+                crm_classification=crm_classification,
+                recommended_crm_action=recommended_crm_action,
                 summary=summary,
                 next_action=next_action,
-                approval_needed=approval_needed,
+                approval_required=approval_required,
+                source_attribution=source_attribution,
             )
         )
     return results
@@ -283,18 +336,22 @@ def render_markdown(
     ]
 
     for result in results:
-        approval = "yes" if result.approval_needed else "no"
+        approval = "yes" if result.approval_required else "no"
         lines.extend(
             [
                 f"## {result.item_id}",
                 "",
+                f"- Source kind: {result.source_kind}",
                 f"- Source: {result.source}",
+                f"- Source attribution: {result.source_attribution}",
                 f"- Company: {result.company}",
                 f"- Role: {result.role}",
-                f"- Classification: {result.classification}",
+                f"- Triage: {result.triage}",
+                f"- Lead vs opportunity: {result.crm_classification}",
+                f"- Recommended CRM action: {result.recommended_crm_action}",
+                f"- Approval required: {approval}",
                 f"- Summary: {result.summary}",
                 f"- Next action: {result.next_action}",
-                f"- Approval needed: {approval}",
                 "",
             ]
         )

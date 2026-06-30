@@ -11,6 +11,7 @@
   "items": [
     {
       "item_id": "fake-job-001",
+      "source_kind": "job_lead",
       "source": "example-job-board",
       "received_at": "2026-06-04T10:30:00Z",
       "company": "Example Robotics",
@@ -26,6 +27,7 @@
     },
     {
       "item_id": "fake-job-002",
+      "source_kind": "recruiter_email",
       "source": "example-recruiter-email",
       "received_at": "2026-06-05T14:45:00Z",
       "company": "Example Systems",
@@ -42,19 +44,18 @@
     },
     {
       "item_id": "fake-job-003",
-      "source": "example-community-board",
+      "source_kind": "application_confirmation",
+      "source": "example-ats-email",
       "received_at": "2026-06-06T08:10:00Z",
-      "company": "Example Retail Group",
-      "role": "Onsite Helpdesk Analyst",
-      "description": "Local onsite support role with no automation scope and no remote option.",
-      "contact": "ops@example.test",
+      "company": "Example Robotics",
+      "role": "Platform Automation Engineer",
+      "description": "Automated application confirmation for the fake Platform Automation Engineer application.",
+      "contact": "no-reply@ats.example.test",
       "signals": [
-        "operations"
+        "application_confirmation",
+        "automated"
       ],
-      "risk_flags": [
-        "onsite_only",
-        "low_fit"
-      ]
+      "risk_flags": []
     }
   ]
 }
