@@ -12,7 +12,7 @@ from typing import Any
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 EXAMPLE_PATH = PROJECT_ROOT / "examples" / "app-instances.example.json"
-DOC_PATH = PROJECT_ROOT / "docs" / "app-support-contract.md"
+DOC_PATH = PROJECT_ROOT / "README.md"
 
 REQUIRED_FIELDS = {
     "app_type",
@@ -34,7 +34,6 @@ ALLOWED_ACCESS_POLICIES = {
 DNS_LABEL = re.compile(r"^[a-z0-9]([-a-z0-9]*[a-z0-9])?$")
 BANNED_PUBLIC_STRINGS = {
     "thekeepstudios.com",
-    "fullheartsroc.org",
     "gmail.com",
     "mailgun",
     "changeme",

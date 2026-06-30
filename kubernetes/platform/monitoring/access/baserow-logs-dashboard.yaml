@@ -116,8 +116,7 @@ data:
       "tags": [
         "baserow",
         "logs",
-        "loki",
-        "relationship-os"
+        "loki"
       ],
       "templating": {
         "list": [
