@@ -311,6 +311,14 @@ python3 scripts/run-automation-fixture.py \
   --json-output .artifacts/automation-triage.dry-run.json
 ```
 
+To run the same workflow from a fake redacted source export:
+
+```bash
+python3 scripts/run-automation-fixture.py \
+  --source-export examples/lead-triage-source-export.fixture.json \
+  --json-output .artifacts/automation-source-export.dry-run.json
+```
+
 Use `--provider local-auto` to detect supported local model CLIs without making
 model calls. If no local provider command is present, the runner reports the
 skip and still uses the deterministic fake provider. Use `--self-test` to verify

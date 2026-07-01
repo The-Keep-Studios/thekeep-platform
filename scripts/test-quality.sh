@@ -120,12 +120,18 @@ python3 "${SCRIPT_DIR}/test-app-instance-examples.py"
 
 log "Local automation fixture checks"
 automation_json="$(mktemp "${TMPDIR:-/tmp}/thekeep-automation.XXXXXX.json")"
-trap 'rm -f "${automation_json}"' EXIT
+source_export_json="$(mktemp "${TMPDIR:-/tmp}/thekeep-source-export.XXXXXX.json")"
+trap 'rm -f "${automation_json}" "${source_export_json}"' EXIT
 python3 "${SCRIPT_DIR}/run-automation-fixture.py" \
   --fixture "${PROJECT_ROOT}/examples/automation-job-source.fixture.json" \
   --json-output "${automation_json}" \
   --self-test >/dev/null
 python3 -m json.tool "${automation_json}" >/dev/null
+python3 "${SCRIPT_DIR}/run-automation-fixture.py" \
+  --source-export "${PROJECT_ROOT}/examples/lead-triage-source-export.fixture.json" \
+  --json-output "${source_export_json}" \
+  --self-test >/dev/null
+python3 -m json.tool "${source_export_json}" >/dev/null
 
 log "EspoCRM assistant contract checks"
 python3 "${SCRIPT_DIR}/test-espocrm-assistant-contract.py"
