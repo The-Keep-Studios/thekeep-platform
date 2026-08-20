@@ -1,0 +1,115 @@
+{
+  "export_version": "2026-07-01.fake.v1",
+  "source_system": "redacted-mailbox-json",
+  "fixture_only": true,
+  "records": [
+    {
+      "source_record_id": "export-msg-001",
+      "source_kind": "job_lead",
+      "source_name": "example-job-alert",
+      "received_at": "2026-06-10T10:30:00Z",
+      "sender": "jobs@example.test",
+      "subject": "Platform Automation Engineer at Example Robotics",
+      "company": "Example Robotics",
+      "role": "Platform Automation Engineer",
+      "body_excerpt": "Remote role focused on self-hosted workflow automation, Linux operations, and internal platform reliability.",
+      "source_url": "https://jobs.example.invalid/postings/fake-job-001",
+      "signals": [
+        "remote",
+        "automation",
+        "platform"
+      ],
+      "risk_flags": [],
+      "details": {
+        "remote_policy": "remote",
+        "fit_reason": "Strong match for platform automation and Linux operations."
+      }
+    },
+    {
+      "source_record_id": "export-msg-002",
+      "source_kind": "recruiter_email",
+      "source_name": "example-recruiter-mailbox",
+      "received_at": "2026-06-11T14:45:00Z",
+      "sender": "recruiter@example.test",
+      "subject": "Fractional AI operations conversation",
+      "company": "Example Systems",
+      "role": "Fractional AI Operations Lead",
+      "body_excerpt": "Recruiter asked for availability to discuss a part-time internal automation and AI operations engagement.",
+      "source_url": "https://mail.example.invalid/messages/export-msg-002",
+      "signals": [
+        "remote",
+        "automation",
+        "human_reply",
+        "consulting"
+      ],
+      "risk_flags": [],
+      "details": {
+        "reciprocal_signal_detail": "Recruiter asked for availability and next-step preferences.",
+        "expected_next_step": "Reply with availability after human review."
+      }
+    },
+    {
+      "source_record_id": "export-msg-003",
+      "source_kind": "application_confirmation",
+      "source_name": "example-ats-mailbox",
+      "received_at": "2026-06-12T08:10:00Z",
+      "sender": "no-reply@ats.example.test",
+      "subject": "Application received for Platform Automation Engineer",
+      "company": "Example Robotics",
+      "role": "Platform Automation Engineer",
+      "body_excerpt": "Automated application confirmation for the fake Platform Automation Engineer application.",
+      "source_url": "https://mail.example.invalid/messages/export-msg-003",
+      "signals": [
+        "application_confirmation",
+        "automated"
+      ],
+      "risk_flags": [],
+      "details": {
+        "application_reference": "fake-application-001"
+      }
+    },
+    {
+      "source_record_id": "export-msg-004",
+      "source_kind": "client_inquiry",
+      "source_name": "example-consulting-mailbox",
+      "received_at": "2026-06-13T16:20:00Z",
+      "sender": "founder@example.test",
+      "subject": "Automation assessment inquiry",
+      "company": "Example Advisory Co",
+      "role": "Internal Automation Assessment",
+      "body_excerpt": "Founder asked about help mapping manual operations into a small self-hosted automation workflow.",
+      "source_url": "https://mail.example.invalid/messages/export-msg-004",
+      "signals": [
+        "inbound_inquiry",
+        "consulting",
+        "automation"
+      ],
+      "risk_flags": [],
+      "details": {
+        "decision_maker": "founder"
+      }
+    },
+    {
+      "source_record_id": "export-msg-005",
+      "source_kind": "job_lead",
+      "source_name": "example-community-board",
+      "received_at": "2026-06-14T09:05:00Z",
+      "sender": "ops@example.test",
+      "subject": "Onsite Helpdesk Analyst",
+      "company": "Example Retail Group",
+      "role": "Onsite Helpdesk Analyst",
+      "body_excerpt": "Local onsite support role with no automation scope and no remote option.",
+      "source_url": "https://jobs.example.invalid/postings/fake-job-005",
+      "signals": [
+        "operations"
+      ],
+      "risk_flags": [
+        "onsite_only",
+        "low_fit"
+      ],
+      "details": {
+        "fit_reason": "Poor fit: onsite-only support role without platform automation scope."
+      }
+    }
+  ]
+}
