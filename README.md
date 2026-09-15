@@ -1095,7 +1095,10 @@ Migration safety:
 
 ### Host Disk Pressure Check
 
-Run the read-only host disk check before or during cluster triage:
+Run the read-only host disk check before or during cluster triage, and
+before starting the production playbook or a release validation pass — a
+host already close to full is more likely to cross the DiskPressure
+threshold under the extra load of a deployment or validation run:
 
 ```bash
 scripts/check-host-disk-pressure.sh
@@ -1119,11 +1122,6 @@ normal platform operation cannot silently fill the host disk. Prefer a small
 number of scheduled snapshots, delete old snapshots manually after confirming a
 new restore point exists, and do not remove Kubernetes data, database files, or
 backup artifacts while workloads are unhealthy.
-
-Run this check before starting the production playbook or a release
-validation pass, not just during incident triage — a host already close to
-full is more likely to cross the DiskPressure threshold under the extra load
-of a deployment or validation run.
 
 ### k3s DiskPressure Recovery Runbook
 
