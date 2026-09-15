@@ -112,6 +112,30 @@ spec:
     - CreateNamespace=true
     - ServerSideApply=true
 {% endif %}
+{% if ((platform_optional_apps | default({})).local_inference | default({})).enabled | default(false) | bool %}
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: platform-local-inference
+  namespace: argocd
+spec:
+  project: platform
+  source:
+    repoURL: "{{ gitops_repo_url }}"
+    targetRevision: "{{ gitops_revision }}"
+    path: kubernetes/apps/local-inference
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: local-inference
+  syncPolicy:
+    automated:
+      prune: false
+      selfHeal: true
+    syncOptions:
+    - CreateNamespace=true
+    - ServerSideApply=true
+{% endif %}
 ---
 apiVersion: argoproj.io/v1alpha1
 kind: Application

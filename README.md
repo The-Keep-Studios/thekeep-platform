@@ -19,6 +19,7 @@ It uses Ansible to provision machines, k3s to run workloads, and Argo CD to keep
 - [Auth, OIDC, And Routing Notes](#auth-oidc-and-routing-notes)
 - [Optional CRM And Assistant](#optional-crm-and-assistant)
 - [GPU Inference Host Prep (Strix Halo)](#gpu-inference-host-prep-strix-halo)
+- [Local Inference (Strix Halo)](#local-inference-strix-halo)
 - [Host Disk Pressure Check](#host-disk-pressure-check)
 - [k3s DiskPressure Recovery Runbook](#k3s-diskpressure-recovery-runbook)
 - [Planned Hardening](#planned-hardening)
@@ -1145,6 +1146,70 @@ until #91's app slice lands. For planning, a ~46GB model plus a game's
 working set fits the confirmed 96GB BIOS VGM split; revisit only if memory
 pressure actually appears.
 
+### Local Inference (Strix Halo)
+
+App-layer slice for #91, building on the host prep above (#92):
+`kubernetes/apps/local-inference/*` plus the matching Ansible/monitoring/
+validation wiring below. Everything stays inert until a human deliberately
+sets `platform_optional_apps.local_inference.enabled: true` and fills in
+its required secrets - nothing here has been applied to or verified
+against the real Strix Halo host.
+
+```yaml
+platform_optional_apps:
+  local_inference:
+    enabled: false
+```
+
+Required secrets once enabled, in ignored `ansible/production_vars.yml` -
+these are the service's own credentials, not a fallback to Grafana's
+basic-auth pair:
+
+```yaml
+platform_secrets:
+  local_inference_basic_auth_user: "CHANGE_ME"
+  local_inference_basic_auth_password: "CHANGE_ME"
+```
+
+Proposed hostname: `inference.thekeepstudios.com` (PROPOSED, pending human
+confirmation - #91 marks the remote-access mechanism as
+`Owner: human | Type: decision`). Adding it as a public hostname in
+Cloudflare Zero Trust is a manual step, same as the "Cloudflare
+Prerequisite" section above, and is not performed by this PR.
+
+Auth for the endpoint is also a pending human decision. Per #91, Traefik
+BasicAuth is the proposed starting point - it mirrors the existing
+Prometheus/Alertmanager stopgap, works with non-interactive API clients,
+and needs nothing new. Cloudflare Access service tokens
+(`CF-Access-Client-Id` / `CF-Access-Client-Secret`) are #91's stated best
+long-term fit; BasicAuth here is a starting point, not the final decision.
+Do not attach `identity-authentik-forward-auth` to this endpoint, even once
+Authentik is fully adopted - forward-auth is a browser redirect flow and
+cannot serve a non-interactive OpenAI-compatible client.
+
+Yielding to the gaming workload uses two mechanisms from #91. `llama-swap`'s
+idle TTL unloads models automatically and is the primary mechanism - the pod
+and `/v1/models` stay up through an unload, so an idle evening does not read
+as an outage. For a hard guarantee before a heavy title, a Steam launch
+option can force an unload first:
+
+```
+bash -c 'curl -fsS -X POST http://<svc>/unload || true; %command%'
+```
+
+`|| true` is deliberate: a broken or unreachable curl must fail open and
+never block a game from starting.
+
+Rollback: set `platform_optional_apps.local_inference.enabled: false` and
+apply. Like the rest of this repo's GitOps apps, `platform-local-inference`
+syncs with `prune: false` - disabling the flag drops it from the rendered
+Application set but does **not** delete anything. Argo CD leaves the
+orphaned `platform-local-inference` Application (and its Deployment, PVC,
+ConfigMap, Ingress, Middleware, Secrets) in place, OutOfSync, until a human
+removes them manually, e.g. `kubectl delete -k kubernetes/apps/local-inference`
+plus `kubectl delete application platform-local-inference -n argocd`. Only
+then does the node return to general-purpose scheduling.
+
 ### Host Disk Pressure Check
 
 Run the read-only host disk check before or during cluster triage, and
@@ -1283,6 +1348,7 @@ This is the backlog for moving from production-like to high availability:
 
 - k3s production bootstrap playbook: `ansible/setup_k3s_production.yml`
 - GPU inference host prep role (#91/#92): `ansible/roles/gpu_inference_host/*`
+- Local inference app manifests (#91, disabled by default): `kubernetes/apps/local-inference/*`
 - Argo platform install: `kubernetes/platform/argocd/*`
 - Cloudflare Tunnel edge deployment: `kubernetes/platform/cloudflared/*`
 - GitOps apps/root: `kubernetes/gitops/*`

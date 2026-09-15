@@ -124,6 +124,17 @@ additionalPrometheusRulesMap:
             annotations:
               summary: "Promtail is unavailable"
               description: "Promtail is not running on every scheduled node, so pod logs may be missing from Loki."
+          # #91: inference has no availability SLA outside work hours, so this only pages while
+          # scoped. hour() is UTC and ignores DST - PROPOSED default window, ~1h seasonal slop accepted
+          # per the issue's own explicitly-permitted tradeoff, approximating 9am-6pm US Eastern.
+          - alert: LocalInferenceUnavailable
+            expr: (kube_deployment_status_replicas_available{namespace="local-inference", deployment="local-inference"} < kube_deployment_spec_replicas{namespace="local-inference", deployment="local-inference"}) and on() (hour() >= 13 and hour() < 22 and day_of_week() >= 1 and day_of_week() < 6)
+            for: 5m
+            labels:
+              severity: critical
+            annotations:
+              summary: "Local inference service is unavailable"
+              description: "The local-inference deployment has fewer available replicas than desired during scoped work hours. Idle model unload does not trigger this - the readiness probe stays green while llama-swap is idle."
 
 alertmanager:
   ingress:

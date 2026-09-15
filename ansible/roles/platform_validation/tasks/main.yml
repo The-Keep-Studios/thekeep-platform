@@ -7,6 +7,7 @@
       - Synced Healthy
     platform_validation_twenty_enabled: "{{ ((platform_optional_apps | default({})).twenty | default({})).enabled | default(false) | bool }}"
     platform_validation_espocrm_enabled: "{{ ((platform_optional_apps | default({})).espocrm | default({})).enabled | default(false) | bool }}"
+    platform_validation_local_inference_enabled: "{{ ((platform_optional_apps | default({})).local_inference | default({})).enabled | default(false) | bool }}"
     platform_validation_leantime_mcp_enabled: "{{ (platform_leantime_mcp | default({})).enabled | default(false) | bool }}"
     platform_validation_leantime_mcp_path: "{{ (platform_leantime_mcp | default({})).endpoint_path | default('/mcp') }}"
 
@@ -77,7 +78,7 @@
       (platform_validation_argo_app_allowed_statuses[item.item] | default([]))
     )
 
-- name: Check optional CRM Argo application status
+- name: Check optional platform Argo application status
   ansible.builtin.command:
     argv:
       - "{{ platform_kubectl }}"
@@ -96,24 +97,26 @@
       enabled: "{{ platform_validation_twenty_enabled }}"
     - name: platform-crm-espocrm
       enabled: "{{ platform_validation_espocrm_enabled }}"
-  register: optional_crm_app_status
+    - name: platform-local-inference
+      enabled: "{{ platform_validation_local_inference_enabled }}"
+  register: optional_platform_app_status
   until: >
-    optional_crm_app_status.rc == 0 and
-    (optional_crm_app_status.stdout | default('') | trim) in platform_validation_default_argo_app_statuses
+    optional_platform_app_status.rc == 0 and
+    (optional_platform_app_status.stdout | default('') | trim) in platform_validation_default_argo_app_statuses
   retries: "{{ platform_validation_argo_app_status_retries | default(60) }}"
   delay: "{{ platform_validation_argo_app_status_delay | default(10) }}"
   changed_when: false
   failed_when: false
   when: item.enabled | bool
 
-- name: Fail if optional CRM Argo application is missing or unhealthy
+- name: Fail if optional platform Argo application is missing or unhealthy
   ansible.builtin.fail:
     msg: >-
       Argo application {{ item.item.name }} is not ready
       (rc={{ item.rc }}, status={{ item.stdout | default('') | trim | default('missing', true) }},
       expected={{ platform_validation_default_argo_app_statuses | join(' or ') }},
       stderr={{ item.stderr | default('') | trim | default('none', true) }}).
-  loop: "{{ optional_crm_app_status.results | default([]) }}"
+  loop: "{{ optional_platform_app_status.results | default([]) }}"
   when:
     - item.item.enabled | bool
     - >
@@ -765,7 +768,7 @@
     url: "{{ item }}"
     status_code: [200, 401, 403]
     timeout: 15
-  loop: "{{ ['https://auth.thekeepstudios.com', 'https://projects.thekeepstudios.com', 'https://mindmaps.thekeepstudios.com', 'https://baserow.thekeepstudios.com', 'https://crm.thekeepstudios.com', 'https://grafana.thekeepstudios.com', 'https://prometheus.thekeepstudios.com', 'https://alerts.thekeepstudios.com', 'https://argocd.thekeepstudios.com'] + (['https://twenty.thekeepstudios.com'] if (platform_validation_twenty_enabled | bool) else []) + (['https://espocrm.thekeepstudios.com'] if (platform_validation_espocrm_enabled | bool) else []) }}"
+  loop: "{{ ['https://auth.thekeepstudios.com', 'https://projects.thekeepstudios.com', 'https://mindmaps.thekeepstudios.com', 'https://baserow.thekeepstudios.com', 'https://crm.thekeepstudios.com', 'https://grafana.thekeepstudios.com', 'https://prometheus.thekeepstudios.com', 'https://alerts.thekeepstudios.com', 'https://argocd.thekeepstudios.com'] + (['https://twenty.thekeepstudios.com'] if (platform_validation_twenty_enabled | bool) else []) + (['https://espocrm.thekeepstudios.com'] if (platform_validation_espocrm_enabled | bool) else []) + (['https://inference.thekeepstudios.com'] if (platform_validation_local_inference_enabled | bool) else []) }}"
   when: require_external_https | default(true) | bool
 
 - name: Verify protected endpoints require authentication
@@ -774,10 +777,7 @@
     status_code: [401, 403]
     timeout: 15
     follow_redirects: all
-  loop:
-    - https://crm.thekeepstudios.com
-    - https://prometheus.thekeepstudios.com
-    - https://alerts.thekeepstudios.com
+  loop: "{{ ['https://crm.thekeepstudios.com', 'https://prometheus.thekeepstudios.com', 'https://alerts.thekeepstudios.com'] + (['https://inference.thekeepstudios.com'] if (platform_validation_local_inference_enabled | bool) else []) }}"
   when: require_external_https | default(true) | bool
 
 - name: Ensure direct_http_urls is not empty when HTTPS is required

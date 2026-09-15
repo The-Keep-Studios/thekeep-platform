@@ -41,6 +41,12 @@ platform_secrets:
   # Protects /approval/apply-change; share only with the approved executor path.
   espocrm_assistant_apply_token: "CHANGE_ME"
 
+  # Optional: local GPU inference (#91). Requires
+  # platform_optional_apps.local_inference.enabled: true. Own credentials -
+  # never falls back to monitoring/grafana's basic-auth pair.
+  local_inference_basic_auth_user: "CHANGE_ME"
+  local_inference_basic_auth_password: "CHANGE_ME"
+
 # Optional CRM app toggles. Baserow remains the core relationship-management app.
 # platform_optional_apps:
 #   twenty:
@@ -55,6 +61,12 @@ platform_secrets:
 #       - "smtp.example.com:587"
 #   espocrm_assistant:
 #     # Requires espocrm.enabled: true. The assistant does not enable EspoCRM.
+#     enabled: false
+#   local_inference:
+#     # PROPOSED default (#91): app-shaped but platform-consumed, matching the
+#     # kubernetes/apps/<name> convention. Path, auth mechanism, and hostname
+#     # are pending human decision per #91's TODO ledger - not final. Also
+#     # requires host prep from gpu_inference_host_enabled below.
 #     enabled: false
 
 # Optional: enable these only when gitops_repo_private is true.

@@ -1,0 +1,133 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: local-inference
+---
+# Model weights are reproducible (re-downloadable), not durable data. This PVC
+# is deliberately excluded from the backup path - no backup-cronjob.yaml here.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: local-inference-model-cache
+  namespace: local-inference
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      # PROPOSED: covers the #91 model shortlist (~46GB + ~20GB + ~17GB) plus
+      # headroom for a swap-in-progress and future models. Revisit against the
+      # host's real free disk capacity.
+      storage: 200Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: local-inference
+  namespace: local-inference
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: local-inference
+  template:
+    metadata:
+      labels:
+        app: local-inference
+    spec:
+      # PROPOSED default per #92 host prep - see README's "GPU Inference Host
+      # Prep (Strix Halo)" section.
+      nodeSelector:
+        thekeep.studio/accelerator: strix-halo
+      containers:
+      - name: llama-swap
+        # PROPOSED - not yet pinned to a digest. Pin after the first
+        # confirmed pull, per #91's acceptance criteria.
+        image: ghcr.io/mostlygeek/llama-swap:vulkan
+        imagePullPolicy: IfNotPresent
+        env:
+        - name: LLAMA_SWAP_CONFIG
+          value: /config/config.yaml
+        ports:
+        - name: http
+          containerPort: 8080
+        # gfx1151 has no amd.com/gpu device-plugin story (see #91), so the
+        # container needs raw access to the host's KFD/DRI device nodes.
+        # PROPOSED and a known limitation, not a long-term posture.
+        securityContext:
+          privileged: true
+        # /v1/models must answer even after llama-swap idle-unloads every
+        # model - idle unload is expected behavior, not an outage.
+        startupProbe:
+          httpGet:
+            path: /v1/models
+            port: http
+          failureThreshold: 30
+          periodSeconds: 5
+          timeoutSeconds: 5
+        readinessProbe:
+          httpGet:
+            path: /v1/models
+            port: http
+          periodSeconds: 15
+          timeoutSeconds: 10
+          failureThreshold: 4
+        livenessProbe:
+          httpGet:
+            path: /v1/models
+            port: http
+          periodSeconds: 30
+          timeoutSeconds: 15
+          failureThreshold: 4
+        volumeMounts:
+        - name: model-cache
+          mountPath: /models
+        - name: models-config
+          mountPath: /config
+          readOnly: true
+        - name: kfd
+          mountPath: /dev/kfd
+        - name: dri
+          mountPath: /dev/dri
+        resources:
+          # PROPOSED first-pass estimate, not benchmarked. Kubernetes memory
+          # accounting does not see unified-memory GPU allocations (#91 risk
+          # 4), so this limit bounds host-RAM-side usage only.
+          requests:
+            cpu: "1"
+            memory: "4Gi"
+          limits:
+            cpu: "8"
+            memory: "96Gi"
+      volumes:
+      - name: model-cache
+        persistentVolumeClaim:
+          claimName: local-inference-model-cache
+      - name: models-config
+        configMap:
+          name: local-inference-models
+      - name: kfd
+        hostPath:
+          path: /dev/kfd
+          type: CharDevice
+      - name: dri
+        hostPath:
+          path: /dev/dri
+          type: Directory
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: local-inference
+  namespace: local-inference
+spec:
+  type: ClusterIP
+  selector:
+    app: local-inference
+  ports:
+  - name: http
+    port: 8080
+    targetPort: http
+    protocol: TCP
