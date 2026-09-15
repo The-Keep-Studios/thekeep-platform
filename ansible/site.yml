@@ -7,9 +7,6 @@
     - role: k3s_host
       tags: [k3s]
       when: enable_k3s | bool
-    - role: localai_k8s
-      tags: [localai]
-      when: enable_localai | bool
     - role: wisemapping_k8s
       tags: [wisemapping]
       when: enable_wisemapping | bool
