@@ -1152,8 +1152,15 @@ App-layer slice for #91, building on the host prep above (#92):
 `kubernetes/apps/local-inference/*` plus the matching Ansible/monitoring/
 validation wiring below. Everything stays inert until a human deliberately
 sets `platform_optional_apps.local_inference.enabled: true` and fills in
-its required secrets - nothing here has been applied to or verified
-against the real Strix Halo host.
+its required secrets - this Kubernetes app has not been applied to the
+real Strix Halo host yet.
+
+The GPU access path and all three shortlisted models it configures do now
+have real hardware evidence, though - see "Real hardware evidence" under
+[GPU Inference Host Prep](#gpu-inference-host-prep-strix-halo) above for
+the `llama-bench` numbers. That evidence is bare `llama.cpp` run directly
+on the host, not through this app's `llama-swap` container, so the
+Deployment/PVC/Ingress here are still unverified end-to-end.
 
 ```yaml
 platform_optional_apps:
