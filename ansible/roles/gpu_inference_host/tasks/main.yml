@@ -1,0 +1,102 @@
+- name: Fail if gpu_inference_host_expected_product_name is not set
+  ansible.builtin.fail:
+    msg: >-
+      gpu_inference_host_expected_product_name must be set to this host's
+      exact DMI product name (see `dmidecode -s system-product-name`) before
+      enabling gpu_inference_host_enabled. This is the only thing standing
+      between this role and running Mesa/tuned changes on the wrong machine.
+  when: gpu_inference_host_expected_product_name | trim | length == 0
+
+- name: Fail if this is not the confirmed inference host
+  ansible.builtin.fail:
+    msg: >-
+      ansible_product_name ({{ ansible_product_name | default('unknown') }})
+      does not match gpu_inference_host_expected_product_name
+      ({{ gpu_inference_host_expected_product_name }}). Refusing to apply
+      GPU inference host prep to an unconfirmed machine.
+  when: ansible_product_name | default('') != gpu_inference_host_expected_product_name
+
+- name: Fail if gpu_inference_host_mesa_pinned_version is not set
+  ansible.builtin.fail:
+    msg: >-
+      gpu_inference_host_mesa_pinned_version must be set explicitly (no
+      default) - see #91's risk about tracking the kisak-mesa PPA head
+      blindly. Benchmark a version first, then pin it here.
+  when: gpu_inference_host_mesa_pinned_version | trim | length == 0
+
+- name: Install Vulkan/RADV evaluation prerequisites
+  ansible.builtin.apt:
+    name:
+      - vulkan-tools
+      - pciutils
+    state: present
+    update_cache: true
+
+- name: Add kisak-mesa PPA
+  ansible.builtin.apt_repository:
+    repo: "{{ gpu_inference_host_mesa_ppa }}"
+    state: present
+
+- name: Pin mesa-vulkan-drivers and libgl1-mesa-dri to the benchmarked version
+  ansible.builtin.apt:
+    name:
+      - "mesa-vulkan-drivers={{ gpu_inference_host_mesa_pinned_version }}"
+      - "libgl1-mesa-dri={{ gpu_inference_host_mesa_pinned_version }}"
+    state: present
+    update_cache: true
+    allow_downgrade: true
+
+- name: Hold pinned Mesa packages so unattended upgrades can't move them
+  ansible.builtin.dpkg_selections:
+    name: "{{ item }}"
+    selection: hold
+  loop:
+    - mesa-vulkan-drivers
+    - libgl1-mesa-dri
+
+- name: Install tuned
+  ansible.builtin.apt:
+    name: tuned
+    state: present
+
+- name: Enable and start tuned
+  ansible.builtin.service:
+    name: tuned
+    enabled: true
+    state: started
+
+- name: Check the active tuned profile
+  ansible.builtin.command: tuned-adm active
+  register: gpu_inference_host_tuned_active
+  changed_when: false
+
+- name: Set the tuned profile # idempotent: only switches if not already active
+  ansible.builtin.command: "tuned-adm profile {{ gpu_inference_host_tuned_profile }}"
+  when: gpu_inference_host_tuned_profile not in gpu_inference_host_tuned_active.stdout
+
+- name: Check for k3s kubeconfig
+  ansible.builtin.stat:
+    path: /etc/rancher/k3s/k3s.yaml
+  register: gpu_inference_host_kubeconfig
+
+- name: Fail if k3s is not installed
+  ansible.builtin.fail:
+    msg: "k3s is not installed or kubeconfig is missing. Run the k3s_host role first."
+  when: not gpu_inference_host_kubeconfig.stat.exists
+
+- name: Check the node's current accelerator label # assumes k3s node name == ansible_hostname (single-node today)
+  ansible.builtin.command: >-
+    /usr/local/bin/kubectl get node {{ ansible_hostname }}
+    -o jsonpath={.metadata.labels.{{ gpu_inference_host_node_label_key }}}
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+  register: gpu_inference_host_current_label
+  changed_when: false
+
+- name: Apply the accelerator node label
+  ansible.builtin.command: >-
+    /usr/local/bin/kubectl label node {{ ansible_hostname }}
+    {{ gpu_inference_host_node_label_key }}={{ gpu_inference_host_node_label_value }} --overwrite
+  environment:
+    KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+  when: gpu_inference_host_current_label.stdout != gpu_inference_host_node_label_value

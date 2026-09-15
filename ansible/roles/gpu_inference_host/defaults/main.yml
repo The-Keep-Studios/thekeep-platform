@@ -1,0 +1,15 @@
+# Refs #91, #92. Host prep only - no cluster workload, no endpoint.
+gpu_inference_host_enabled: false
+
+# Required once enabled - no guessed default. Prevents this role from ever
+# touching a host it wasn't deliberately confirmed for (see tasks/main.yml).
+gpu_inference_host_expected_product_name: ""
+
+# kisak-mesa PPA pin. Required once enabled - "track the PPA head" is a risk
+# called out in #91, not a default to fall into silently.
+gpu_inference_host_mesa_ppa: "ppa:kisak/kisak-mesa"
+gpu_inference_host_mesa_pinned_version: ""
+
+gpu_inference_host_tuned_profile: throughput-performance
+gpu_inference_host_node_label_key: "thekeep.studio/accelerator"
+gpu_inference_host_node_label_value: "strix-halo"
