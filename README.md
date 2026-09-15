@@ -1127,17 +1127,19 @@ of a deployment or validation run.
 
 ### k3s DiskPressure Recovery Runbook
 
-DiskPressure is a node condition, not a pod-level failure: kubelet taints the
-node and stops scheduling new pods there once a host filesystem threshold is
-crossed, and may evict existing pods. Recovery means freeing host disk space
-and letting kubelet clear the condition — not restarting or reconfiguring
-whichever workloads happened to be scheduled on that node.
+DiskPressure is a node condition, not a pod-level failure: kubelet reports
+the condition once a host filesystem eviction threshold is crossed, the
+control plane then taints the node so no new pods schedule there, and
+kubelet may evict existing pods to reclaim space. Recovery means freeing
+host disk space and letting kubelet clear the condition on its own — not
+restarting or reconfiguring whichever workloads happened to be scheduled on
+that node.
 
-**1. Identify DiskPressure**
+#### 1. Identify DiskPressure
 
 ```bash
 scripts/check-host-disk-pressure.sh
-kubectl describe nodes | grep -A5 Conditions
+kubectl describe nodes | grep -A8 Conditions
 kubectl get nodes -o jsonpath='{range .items[*]}{.metadata.name}{"\t"}{.spec.taints}{"\n"}{end}'
 ```
 
@@ -1145,27 +1147,40 @@ A `DiskPressure` condition of `True`, or a `node.kubernetes.io/disk-pressure`
 taint, confirms the node itself is under pressure rather than an individual
 app being unhealthy.
 
-**2. Confirm affected pods**
+#### 2. Confirm affected pods
 
 ```bash
 kubectl get pods -A -o wide --field-selector=status.phase=Pending
+kubectl get pods -A -o wide --field-selector=status.phase=Failed
 kubectl get events -A --sort-by=.lastTimestamp | grep -iE 'evict|disk'
 ```
 
-Pods stuck `Pending`, or freshly `Evicted`, on the pressured node are the
-ones affected. Pods on other nodes, or already-running pods that were never
-evicted, are not part of this incident — leave them alone.
+`Pending` pods blocked by the taint have not been scheduled anywhere, so
+their `NODE` column reads `<none>` — that is expected, not a sign the check
+failed. Already-evicted pods report phase `Failed` with reason `Evicted`.
+Pods that are `Running` and were never evicted are not part of this
+incident — leave them alone.
 
-**3. Recover**
+#### 3. Recover
 
 - Free root filesystem space per the retention guidance above (for example,
   old snapshots outside the platform's own data). Do not remove Kubernetes
   data, database files, or backup artifacts to do this.
 - Re-run `scripts/check-host-disk-pressure.sh` and confirm usage is back
-  under threshold.
-- If the node's `DiskPressure` condition does not clear on its own once
-  space is free, restart k3s on that node (`systemctl restart k3s`, or
-  `k3s-agent` on a worker) so kubelet re-evaluates the condition.
+  under threshold. The script's default threshold (20 GiB / 85% used) is a
+  safety margin above kubelet's own default eviction thresholds
+  (`nodefs.available<10%`, `imagefs.available<15%`), so passing it implies
+  kubelet's thresholds are satisfied too.
+- Wait — kubelet holds `DiskPressure` for its eviction-pressure-transition
+  period (5 minutes by default) after usage drops before clearing the
+  condition and letting the taint be removed. Most incidents resolve here
+  with no further action.
+- Only if the condition is still `True` well past that window, restart k3s
+  on the affected node (`systemctl restart k3s`, root required — not the
+  `k3s-admin` account used for `kubectl`). On the current single-node
+  cluster this restarts every workload on it (Argo CD, the tunnel, all
+  apps), so treat it as a full node-level outage of last resort, not a
+  scoped action.
 - Confirm the taint is gone and previously affected pods reach `Running`:
 
 ```bash
@@ -1173,10 +1188,12 @@ kubectl get nodes -o jsonpath='{range .items[*]}{.metadata.name}{"\t"}{.spec.tai
 kubectl get pods -A -o wide
 ```
 
-**Scope discipline:** this recovery only touches host disk usage and, if
-needed, a restart of k3s on the affected node. Do not restart unrelated
-nodes, delete unrelated pods, or change GitOps-managed state — Argo CD
-reconciles anything that legitimately needs to change.
+**Scope discipline:** free host disk space and, if that alone doesn't clear
+the condition, wait for kubelet's own transition period. Do not restart
+unrelated nodes, delete unrelated pods, or change GitOps-managed state —
+Argo CD reconciles anything that legitimately needs to change. A k3s
+restart on the current single-node cluster is not scoped to this incident;
+it is a full outage, so exhaust the steps above first.
 
 ### Destructive Operations Policy
 
