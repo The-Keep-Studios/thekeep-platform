@@ -1,0 +1,26 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: local-inference-ingress
+  namespace: local-inference
+  annotations:
+    # #91: Traefik BasicAuth is a PROPOSED starting point (same precedent as monitoring's
+    # Prometheus/Alertmanager), not the final decision - Cloudflare Access service tokens are
+    # #91's stated best long-term fit.
+    traefik.ingress.kubernetes.io/router.middlewares: local-inference-local-inference-basic-auth@kubernetescrd
+    traefik.ingress.kubernetes.io/service.serversscheme: http
+spec:
+  rules:
+  # PROPOSED hostname (#91, unconfirmed). Not yet registered in Cloudflare Zero Trust - adding
+  # the public hostname there is a manual step, same as README's Cloudflare Prerequisite
+  # section, and is not done by this PR.
+  - host: inference.thekeepstudios.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: local-inference
+            port:
+              number: 8080

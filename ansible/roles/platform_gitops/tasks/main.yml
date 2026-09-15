@@ -265,6 +265,8 @@
       enabled: "{{ ((platform_optional_apps | default({})).twenty | default({})).enabled | default(false) | bool }}"
     - name: espocrm
       enabled: "{{ ((platform_optional_apps | default({})).espocrm | default({})).enabled | default(false) | bool }}"
+    - name: local-inference
+      enabled: "{{ ((platform_optional_apps | default({})).local_inference | default({})).enabled | default(false) | bool }}"
   when: item.enabled | bool
   changed_when: >
     optional_namespace_apply.stdout is defined and
@@ -359,10 +361,21 @@
       data:
         username: "{{ platform_secrets.monitoring_basic_auth_user | default(platform_secrets.grafana_admin_user) }}"
         password: "{{ platform_secrets.monitoring_basic_auth_password | default(platform_secrets.grafana_admin_password) }}"
+    - name: local-inference-basic-auth
+      namespace: local-inference
+      type: kubernetes.io/basic-auth
+      # Own credentials - never falls back to monitoring/grafana's basic-auth pair.
+      enabled: "{{ ((platform_optional_apps | default({})).local_inference | default({})).enabled | default(false) | bool }}"
+      data:
+        username: "{{ platform_secrets.local_inference_basic_auth_user | default('') }}"
+        password: "{{ platform_secrets.local_inference_basic_auth_password | default('') }}"
     - name: cloudflare-tunnel-token
       namespace: kube-system
       data:
         token: "{{ platform_secrets.cloudflare_tunnel_token }}"
+  # Only local-inference-basic-auth sets item.enabled - every other entry here
+  # is a core secret and stays unconditional.
+  when: item.enabled | default(true) | bool
 
 - name: Apply Twenty optional app secret
   ansible.builtin.command:
