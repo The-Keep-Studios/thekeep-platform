@@ -1135,6 +1135,39 @@ llama-bench -m <model.gguf> -b <backend, e.g. Vulkan> -ngl 999
 Record backend, model, quant, build number, and exact flags alongside the
 t/s result; a number without the command isn't evidence.
 
+Real evidence gathered against the host over SSH (prebuilt `llama.cpp`
+Vulkan release, build `38a5b42d9` / b10989, `AMD Radeon 8060S Graphics
+(RADV STRIX_HALO)`, Mesa `26.2.2~kisak1~n` from `kisak-mesa`,
+`llama-bench -m <model.gguf> -ngl 999`) for all three models #91
+shortlisted:
+
+| Model | Quant | pp512 | tg128 | #91 predicted tg128 |
+| --- | --- | --- | --- | --- |
+| Qwen3-Coder-30B-A3B-Instruct | Q4_K_S | 1430.11 ± 19.32 t/s | 97.38 ± 0.23 t/s | ~98 t/s |
+| Qwen3.6-35B-A3B | UD-Q4_K_S | 1249.47 ± 10.44 t/s | 64.65 ± 0.10 t/s | ~62 t/s (non-speculative) |
+| Qwen3-Coder-Next-80B-A3B | IQ4_XS | 750.09 ± 6.97 t/s | 63.02 ± 0.10 t/s | ~62 t/s |
+
+All three land within a few percent of #91's own predictions, confirming
+the model/quant shortlist on real hardware. Mesa `26.2.2~kisak1~n`, already
+installed on this host via the `kisak-mesa` PPA, ran all three cleanly at
+full GPU offload - a reasonable starting point for
+`gpu_inference_host_mesa_pinned_version`, though it hasn't yet been
+benchmarked against the gaming workload it's shared with.
+
+`gpu_inference_host_expected_product_name` has also been confirmed against
+the live host's `/sys/class/dmi/id/product_name` (no sudo needed - the
+file is world-readable) - see the PR for the exact value rather than
+committing a real hardware identifier here.
+
+These numbers were captured with the physical console sitting at the
+LightDM greeter (Xorg running, but no user logged into a Cinnamon session)
+- neither of the two states this section actually asks about. The
+X11-vs-Wayland comparison below is therefore still genuinely open; both
+`cinnamon.desktop` (X11) and `cinnamon-wayland.desktop` (Wayland) are
+available at the greeter's session picker on this host, so the comparison
+is mechanically possible, it just needs someone logged in locally under
+each session while the benchmark runs over SSH.
+
 X11 vs Wayland is an open decision, not a default: setup guides for this
 hardware recommend X11 for serving, but the box also games and modern
 gaming increasingly wants Wayland. Benchmark both plus a subjective gaming
