@@ -353,6 +353,9 @@
   roles:
     - role: k3s_host
       tags: [k3s]
+    - role: gpu_inference_host # host prep only (#92) - disabled by default, no cluster workload
+      tags: [gpu-inference-host]
+      when: gpu_inference_host_enabled | default(false) | bool
     - role: platform_gitops
       tags: [platform, gitops]
     - role: platform_validation
