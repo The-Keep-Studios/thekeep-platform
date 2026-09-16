@@ -1173,6 +1173,18 @@ hardware recommend X11 for serving, but the box also games and modern
 gaming increasingly wants Wayland. Benchmark both plus a subjective gaming
 check before choosing.
 
+That choice is a config value, not a fork: `gpu_inference_host_display_session`
+(`"x11"`, `"wayland"`, or empty - the default, which leaves the greeter's
+session choice untouched). Once the benchmark above settles it, setting this
+var makes the role configure the greeter's default session to match, via a
+`/etc/lightdm/lightdm.conf.d/` drop-in - `gpu_inference_host_display_session_name_x11`/
+`_name_wayland` map the choice to this host's actual Cinnamon session names,
+so a future host on a different desktop environment just overrides those two,
+not the role itself. Deliberately not two long-lived branches: this is one
+runtime setting on an otherwise-identical role, and a host's answer can
+change later (a Mesa/kernel Wayland improvement, a different box entirely)
+without re-merging anything.
+
 No cgroup memory enforcement yet - there is no inference workload to bound
 until #91's app slice lands. For planning, a ~46GB model plus a game's
 working set fits the confirmed 96GB BIOS VGM split; revisit only if memory
