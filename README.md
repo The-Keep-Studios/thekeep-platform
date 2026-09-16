@@ -1168,14 +1168,13 @@ platform_optional_apps:
     enabled: false
 ```
 
-Required secrets once enabled, in ignored `ansible/production_vars.yml` -
-these are the service's own credentials, not a fallback to Grafana's
+Required secret once enabled, in ignored `ansible/production_vars.yml` -
+this is the service's own credential, not a fallback to Grafana's
 basic-auth pair:
 
 ```yaml
 platform_secrets:
-  local_inference_basic_auth_user: "CHANGE_ME"
-  local_inference_basic_auth_password: "CHANGE_ME"
+  local_inference_api_key: "CHANGE_ME"
 ```
 
 Proposed hostname: `inference.thekeepstudios.com` (PROPOSED, pending human
@@ -1184,15 +1183,20 @@ confirmation - #91 marks the remote-access mechanism as
 Cloudflare Zero Trust is a manual step, same as the "Cloudflare
 Prerequisite" section above, and is not performed by this PR.
 
-Auth for the endpoint is also a pending human decision. Per #91, Traefik
-BasicAuth is the proposed starting point - it mirrors the existing
-Prometheus/Alertmanager stopgap, works with non-interactive API clients,
-and needs nothing new. Cloudflare Access service tokens
+Auth for the endpoint is also a pending human decision. Per #91, an API key
+checked by `llama-swap` itself is the proposed starting point - it sends
+`Authorization: Bearer <key>`, the convention every OpenAI-compatible
+client (JetBrains AI Assistant, Continue, and similar coding-assistant
+tools included) expects natively. An earlier draft proposed Traefik
+BasicAuth instead, mirroring the existing Prometheus/Alertmanager stopgap,
+but BasicAuth's username/password challenge is not what these clients send
+- their "API key" field goes out as a Bearer token, so a BasicAuth
+Middleware would just reject them. Cloudflare Access service tokens
 (`CF-Access-Client-Id` / `CF-Access-Client-Secret`) are #91's stated best
-long-term fit; BasicAuth here is a starting point, not the final decision.
-Do not attach `identity-authentik-forward-auth` to this endpoint, even once
-Authentik is fully adopted - forward-auth is a browser redirect flow and
-cannot serve a non-interactive OpenAI-compatible client.
+long-term fit; the llama-swap API key here is a starting point, not the
+final decision. Do not attach `identity-authentik-forward-auth` to this
+endpoint, even once Authentik is fully adopted - forward-auth is a browser
+redirect flow and cannot serve a non-interactive OpenAI-compatible client.
 
 Yielding to the gaming workload uses two mechanisms from #91. `llama-swap`'s
 idle TTL unloads models automatically and is the primary mechanism - the pod

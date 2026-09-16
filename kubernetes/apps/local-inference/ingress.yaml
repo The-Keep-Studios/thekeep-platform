@@ -4,10 +4,11 @@ metadata:
   name: local-inference-ingress
   namespace: local-inference
   annotations:
-    # #91: Traefik BasicAuth is a PROPOSED starting point (same precedent as monitoring's
-    # Prometheus/Alertmanager), not the final decision - Cloudflare Access service tokens are
-    # #91's stated best long-term fit.
-    traefik.ingress.kubernetes.io/router.middlewares: local-inference-local-inference-basic-auth@kubernetescrd
+    # #91: no Traefik auth middleware here - llama-swap checks its own apiKeys
+    # config (Authorization: Bearer <key>), matching what OpenAI-compatible
+    # clients (JetBrains AI Assistant, Continue, etc.) send natively. This is a
+    # PROPOSED starting point, not the final decision - Cloudflare Access
+    # service tokens are #91's stated best long-term fit.
     traefik.ingress.kubernetes.io/service.serversscheme: http
 spec:
   rules:

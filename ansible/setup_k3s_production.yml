@@ -135,7 +135,7 @@
               'espocrm_assistant_token',
               'espocrm_assistant_apply_token'
             ] if (platform_optional_espocrm_assistant_enabled | bool) else []) +
-            (['local_inference_basic_auth_user', 'local_inference_basic_auth_password'] if (platform_optional_local_inference_enabled | bool) else [])
+            (['local_inference_api_key'] if (platform_optional_local_inference_enabled | bool) else [])
           }}
       tags: [always]
 

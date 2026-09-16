@@ -50,6 +50,13 @@ spec:
         env:
         - name: LLAMA_SWAP_CONFIG
           value: /config/config.yaml
+        # Expanded into config.yaml's apiKeys entry by llama-swap itself
+        # (${env.LOCAL_INFERENCE_API_KEY}) - never written into the ConfigMap.
+        - name: LOCAL_INFERENCE_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: local-inference-api-key
+              key: API_KEY
         ports:
         - name: http
           containerPort: 8080

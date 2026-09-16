@@ -16,6 +16,15 @@ data:
     # real load-time evidence before this is treated as tuned.
     healthCheckTimeout: 300
 
+    # Requires "Authorization: Bearer <key>" on every request - the same
+    # convention OpenAI-compatible clients (JetBrains AI Assistant, Continue,
+    # etc.) send natively, unlike Traefik BasicAuth's username/password
+    # challenge. Value comes from the LOCAL_INFERENCE_API_KEY env var (see
+    # production.yaml), sourced from the local-inference-api-key Secret -
+    # never baked into this ConfigMap directly.
+    apiKeys:
+      - "${env.LOCAL_INFERENCE_API_KEY}"
+
     models:
       "qwen3-coder-next-80b-a3b":
         name: "Qwen3-Coder-Next 80B-A3B (IQ4_XS)"
