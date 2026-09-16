@@ -3,5 +3,4 @@ kind: Kustomization
 resources:
 - production.yaml
 - configmap.models.yaml
-- middleware.yaml
 - ingress.yaml

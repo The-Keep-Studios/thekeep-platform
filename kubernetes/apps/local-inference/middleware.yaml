@@ -1,8 +1,0 @@
-apiVersion: traefik.io/v1alpha1
-kind: Middleware
-metadata:
-  name: local-inference-basic-auth
-  namespace: local-inference
-spec:
-  basicAuth:
-    secret: local-inference-basic-auth

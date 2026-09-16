@@ -361,19 +361,21 @@
       data:
         username: "{{ platform_secrets.monitoring_basic_auth_user | default(platform_secrets.grafana_admin_user) }}"
         password: "{{ platform_secrets.monitoring_basic_auth_password | default(platform_secrets.grafana_admin_password) }}"
-    - name: local-inference-basic-auth
+    - name: local-inference-api-key
       namespace: local-inference
-      type: kubernetes.io/basic-auth
-      # Own credentials - never falls back to monitoring/grafana's basic-auth pair.
+      # Own credential - never falls back to monitoring/grafana's basic-auth pair.
+      # Checked by llama-swap itself (its own apiKeys config, matching the
+      # OpenAI "Authorization: Bearer <key>" convention every OpenAI-compatible
+      # client - JetBrains AI Assistant, Continue, etc. - expects natively), not
+      # by a Traefik middleware.
       enabled: "{{ ((platform_optional_apps | default({})).local_inference | default({})).enabled | default(false) | bool }}"
       data:
-        username: "{{ platform_secrets.local_inference_basic_auth_user | default('') }}"
-        password: "{{ platform_secrets.local_inference_basic_auth_password | default('') }}"
+        API_KEY: "{{ platform_secrets.local_inference_api_key | default('') }}"
     - name: cloudflare-tunnel-token
       namespace: kube-system
       data:
         token: "{{ platform_secrets.cloudflare_tunnel_token }}"
-  # Only local-inference-basic-auth sets item.enabled - every other entry here
+  # Only local-inference-api-key sets item.enabled - every other entry here
   # is a core secret and stays unconditional.
   when: item.enabled | default(true) | bool
 

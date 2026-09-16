@@ -42,10 +42,12 @@ platform_secrets:
   espocrm_assistant_apply_token: "CHANGE_ME"
 
   # Optional: local GPU inference (#91). Requires
-  # platform_optional_apps.local_inference.enabled: true. Own credentials -
-  # never falls back to monitoring/grafana's basic-auth pair.
-  local_inference_basic_auth_user: "CHANGE_ME"
-  local_inference_basic_auth_password: "CHANGE_ME"
+  # platform_optional_apps.local_inference.enabled: true. Own credential -
+  # never falls back to monitoring/grafana's basic-auth pair. Checked by
+  # llama-swap itself as "Authorization: Bearer <key>" - the convention
+  # OpenAI-compatible clients (JetBrains AI Assistant, Continue, etc.) expect
+  # natively - not a Traefik BasicAuth username/password challenge.
+  local_inference_api_key: "CHANGE_ME"
 
 # Optional CRM app toggles. Baserow remains the core relationship-management app.
 # platform_optional_apps:
