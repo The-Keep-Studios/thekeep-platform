@@ -100,3 +100,26 @@
   environment:
     KUBECONFIG: /etc/rancher/k3s/k3s.yaml
   when: gpu_inference_host_current_label.stdout != gpu_inference_host_node_label_value
+
+- name: Fail if gpu_inference_host_display_session is set to an unsupported value
+  ansible.builtin.fail:
+    msg: >-
+      gpu_inference_host_display_session must be "x11", "wayland", or left
+      empty (default - leaves the greeter's session choice alone, pending
+      real benchmark evidence per #92's still-open comparison).
+  when:
+    - gpu_inference_host_display_session | trim | length > 0
+    - gpu_inference_host_display_session not in ['x11', 'wayland']
+
+- name: Configure the greeter's default session to match the confirmed choice
+  become: true
+  ansible.builtin.copy:
+    dest: /etc/lightdm/lightdm.conf.d/60-gpu-inference-host-session.conf
+    mode: "0644"
+    content: |
+      # Managed by thekeep-platform's gpu_inference_host role. Set via
+      # gpu_inference_host_display_session once a real X11-vs-Wayland
+      # llama-bench comparison settles #92's open decision on this host.
+      [Seat:*]
+      user-session={{ gpu_inference_host_display_session_name_wayland if gpu_inference_host_display_session == 'wayland' else gpu_inference_host_display_session_name_x11 }}
+  when: gpu_inference_host_display_session | trim | length > 0
