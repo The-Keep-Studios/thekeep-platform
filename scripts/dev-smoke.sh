@@ -336,10 +336,10 @@ smoke_espocrm() {
 }
 
 smoke_local_inference() {
-  local probe_host="${LOCAL_INFERENCE_PROBE_HOST:-inference.thekeepstudios.com}"
   local wait_timeout="${LOCAL_INFERENCE_WAIT_TIMEOUT:-${DEFAULT_WAIT_TIMEOUT}}"
-  local basic_auth_user="${LOCAL_INFERENCE_DEV_BASIC_AUTH_USER:-dev-local-inference-user}"
-  local basic_auth_password="${LOCAL_INFERENCE_DEV_BASIC_AUTH_PASSWORD:-dev-local-inference-password-not-for-production}"
+  # llama-swap's own apiKeys check (not Traefik BasicAuth - there's no
+  # Ingress here at all, see #91's LAN-only-NodePort decision), dev-only key.
+  local dev_api_key="${LOCAL_INFERENCE_DEV_API_KEY:-dev-local-inference-key-not-for-production}"
   local accelerator_nodes
   local probe_name
   local probe_output
@@ -355,10 +355,8 @@ smoke_local_inference() {
   fi
 
   kubectl create namespace local-inference --dry-run=client -o yaml | kubectl apply -f -
-  kubectl create secret generic local-inference-basic-auth -n local-inference \
-    --type=kubernetes.io/basic-auth \
-    --from-literal=username="${basic_auth_user}" \
-    --from-literal=password="${basic_auth_password}" \
+  kubectl create secret generic local-inference-api-key -n local-inference \
+    --from-literal=API_KEY="${dev_api_key}" \
     --dry-run=client -o yaml | kubectl apply -f -
 
   kubectl apply -k kubernetes/apps/local-inference
@@ -376,8 +374,7 @@ smoke_local_inference() {
     -- \
     sh -ceu '
       curl -fsS --max-time 20 \
-        -H "Host: '"${probe_host}"'" \
-        -H "X-Forwarded-Proto: https" \
+        -H "Authorization: Bearer '"${dev_api_key}"'" \
         http://local-inference:8080/v1/models > /tmp/local-inference-models.json
       grep -Eq "\"object\"[[:space:]]*:[[:space:]]*\"list\"" /tmp/local-inference-models.json
       cat /tmp/local-inference-models.json

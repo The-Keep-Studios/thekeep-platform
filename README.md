@@ -1160,7 +1160,7 @@ have real hardware evidence, though - see "Real hardware evidence" under
 [GPU Inference Host Prep](#gpu-inference-host-prep-strix-halo) above for
 the `llama-bench` numbers. That evidence is bare `llama.cpp` run directly
 on the host, not through this app's `llama-swap` container, so the
-Deployment/PVC/Ingress here are still unverified end-to-end.
+Deployment/PVC/Service here are still unverified end-to-end.
 
 ```yaml
 platform_optional_apps:
@@ -1177,26 +1177,47 @@ platform_secrets:
   local_inference_api_key: "CHANGE_ME"
 ```
 
-Proposed hostname: `inference.thekeepstudios.com` (PROPOSED, pending human
-confirmation - #91 marks the remote-access mechanism as
-`Owner: human | Type: decision`). Adding it as a public hostname in
-Cloudflare Zero Trust is a manual step, same as the "Cloudflare
-Prerequisite" section above, and is not performed by this PR.
+**No public hostname, no Ingress, no Cloudflare Tunnel - deliberately.**
+Every other app in this platform reaches the internet through the GitOps-managed
+`platform-cloudflare-tunnel` app; this one does not, and that's a decision, not
+an oversight. The service is reachable two ways instead:
 
-Auth for the endpoint is also a pending human decision. Per #91, an API key
-checked by `llama-swap` itself is the proposed starting point - it sends
-`Authorization: Bearer <key>`, the convention every OpenAI-compatible
-client (JetBrains AI Assistant, Continue, and similar coding-assistant
-tools included) expects natively. An earlier draft proposed Traefik
-BasicAuth instead, mirroring the existing Prometheus/Alertmanager stopgap,
-but BasicAuth's username/password challenge is not what these clients send
-- their "API key" field goes out as a Bearer token, so a BasicAuth
-Middleware would just reject them. Cloudflare Access service tokens
-(`CF-Access-Client-Id` / `CF-Access-Client-Secret`) are #91's stated best
-long-term fit; the llama-swap API key here is a starting point, not the
-final decision. Do not attach `identity-authentik-forward-auth` to this
-endpoint, even once Authentik is fully adopted - forward-auth is a browser
-redirect flow and cannot serve a non-interactive OpenAI-compatible client.
+- **In-cluster**, via the `local-inference` ClusterIP-equivalent DNS name
+  (`local-inference.local-inference.svc.cluster.local:8080`) - any pod in the
+  cluster can call it, the same pattern the EspoCRM assistant already uses for
+  its own in-cluster consumers.
+- **LAN**, via a `NodePort` (`30880`) bound to the node's own network
+  interfaces. A trusted device on the home network - a workstation running
+  JetBrains AI Assistant, Continue, or a similar OpenAI-compatible tool - can
+  reach `http://<node-lan-ip>:30880` directly. This never leaves the LAN on
+  its own: nothing here forwards the port to the public internet, and it must
+  stay that way unless someone deliberately configures port-forwarding at the
+  router, which this platform does not do and should not need to.
+
+`llama-swap`'s own `apiKeys` check (`Authorization: Bearer <key>`, the
+convention every OpenAI-compatible client already speaks - see below) still
+applies on every request through either path. That matters more on the LAN
+path: any device on the network can reach the NodePort, not just your own
+workstation, so the API key is the only thing standing between "on your LAN"
+and "can call the model."
+
+A hardened, Cloudflare Access-authenticated public hostname - mirroring how
+the rest of the platform is exposed - is a real possibility for later, not
+ruled out, but deliberately not built now. If that changes, it adds a path;
+it should not become the only path, since in-cluster and LAN callers would
+still have no reason to leave the LAN.
+
+Auth mechanism: an API key checked by `llama-swap` itself, not Traefik
+BasicAuth. It sends `Authorization: Bearer <key>`, the convention every
+OpenAI-compatible client (JetBrains AI Assistant, Continue, and similar
+coding-assistant tools included) expects natively - an earlier draft used
+Traefik BasicAuth, mirroring the existing Prometheus/Alertmanager stopgap,
+but BasicAuth's username/password challenge is not what these clients send;
+their "API key" field goes out as a Bearer token, so a BasicAuth Middleware
+would just reject them. Do not attach `identity-authentik-forward-auth` to
+this endpoint even if a public path is added later - forward-auth is a
+browser redirect flow and cannot serve a non-interactive OpenAI-compatible
+client.
 
 Yielding to the gaming workload uses two mechanisms from #91. `llama-swap`'s
 idle TTL unloads models automatically and is the primary mechanism - the pod

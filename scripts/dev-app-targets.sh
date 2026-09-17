@@ -96,7 +96,10 @@ dev_app_observe_config() {
       APP_SERVICE="local-inference"
       APP_DEPLOYMENT="local-inference"
       APP_PORT="${LOCAL_INFERENCE_OBSERVE_PORT:-18085}"
-      APP_HOST="${LOCAL_INFERENCE_PROBE_HOST:-inference.thekeepstudios.com}"
+      # No public hostname (#91: LAN-only via NodePort, no Ingress) - the
+      # Host header other apps' probes simulate for Traefik routing doesn't
+      # apply here, so this is just the port-forwarded local address.
+      APP_HOST="127.0.0.1:${APP_PORT}"
       APP_PROBE_PATH="/v1/models"
       APP_PROBE_PATTERN="\"object\":\\s*\"model\"|\"data\":"
       APP_CONFIG_KIND="local-inference"
