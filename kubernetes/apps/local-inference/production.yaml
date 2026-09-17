@@ -130,11 +130,24 @@ metadata:
   name: local-inference
   namespace: local-inference
 spec:
-  type: ClusterIP
+  # NodePort, not ClusterIP: this still answers in-cluster callers on their
+  # own (any pod can reach it via the Service's ClusterIP, same as before -
+  # NodePort adds a port, it doesn't remove that), but also binds
+  # nodePort below on the node's own network interfaces, including the LAN
+  # one - so a trusted device on the home network (a workstation running
+  # JetBrains AI Assistant, say) can reach it directly. Deliberately NOT a
+  # public Ingress/hostname/Cloudflare Tunnel (#91) - nothing here reaches
+  # the public internet unless something outside this repo forwards the
+  # port, which nothing should. llama-swap's own apiKeys check (see
+  # configmap.models.yaml) still applies on every request either way - any
+  # other device on the LAN can also reach this port, not just your own
+  # workstation.
+  type: NodePort
   selector:
     app: local-inference
   ports:
   - name: http
     port: 8080
     targetPort: http
+    nodePort: 30880
     protocol: TCP
