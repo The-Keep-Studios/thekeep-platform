@@ -1177,12 +1177,13 @@ platform_secrets:
   local_inference_api_key: "CHANGE_ME"
 ```
 
-**No public hostname, no Ingress, no Cloudflare Tunnel - deliberately.**
-Every other app in this platform reaches the internet through the GitOps-managed
-`platform-cloudflare-tunnel` app; this one does not, and that's a decision, not
-an oversight. The service is reachable two ways instead:
+**No public hostname by default - LAN and in-cluster only.**
+`kubernetes/apps/local-inference/base` is what applies whenever
+`platform_optional_apps.local_inference.enabled: true`, and it never adds an
+Ingress, a hostname, or anything routed through the platform's shared
+Cloudflare Tunnel. The service is reachable two ways:
 
-- **In-cluster**, via the `local-inference` ClusterIP-equivalent DNS name
+- **In-cluster**, via the `local-inference` Service's cluster DNS name
   (`local-inference.local-inference.svc.cluster.local:8080`) - any pod in the
   cluster can call it, the same pattern the EspoCRM assistant already uses for
   its own in-cluster consumers.
@@ -1199,13 +1200,46 @@ convention every OpenAI-compatible client already speaks - see below) still
 applies on every request through either path. That matters more on the LAN
 path: any device on the network can reach the NodePort, not just your own
 workstation, so the API key is the only thing standing between "on your LAN"
-and "can call the model."
+and "can call the model." Worth being precise about what that key is and
+isn't protecting against: the inference API is a text-in/text-out completion
+endpoint, not an agent with host access - it cannot execute commands on the
+node through this surface no matter who holds the key. What the key
+(and the LAN boundary generally) protects against is unauthorized *use* -
+someone else's device burning GPU time or extracting output from a model
+they weren't meant to reach - and the separate, narrower concern that the
+container itself runs `privileged: true` with raw `/dev/kfd`/`/dev/dri`
+access (see the Deployment) for the GPU passthrough gfx1151 currently has
+no clean device-plugin story for; that's a container-escape surface tied to
+the pod's own security context, unrelated to what a prompt sent to the API
+can do.
 
-A hardened, Cloudflare Access-authenticated public hostname - mirroring how
-the rest of the platform is exposed - is a real possibility for later, not
-ruled out, but deliberately not built now. If that changes, it adds a path;
-it should not become the only path, since in-cluster and LAN callers would
-still have no reason to leave the LAN.
+**A public hostname is opt-in and requires a real Cloudflare Access policy
+first - not just built and left disabled.**
+`platform_optional_apps.local_inference.public_access_enabled: true` switches
+the Argo Application's source path from `base` to
+`overlays/public-access`, which layers an Ingress + the proposed
+`inference.thekeepstudios.com` hostname on top of the same base. Enabling it
+also requires `public_access_cloudflare_access_confirmed: true` - a human
+self-attestation that a Cloudflare Access policy (Zero Trust -> Access ->
+Applications) already protects that hostname, *before* it's added to the
+tunnel's Public Hostname list. `setup_k3s_production.yml` refuses to run
+without that confirmation; Ansible cannot verify a Cloudflare dashboard
+setting, so this is honesty-based, not enforced - the flag existing is not
+the same as the policy existing. Registering the hostname itself in the
+tunnel is still the same kind of manual step as the "Cloudflare
+Prerequisite" section above, and is not performed by any PR.
+
+```yaml
+platform_optional_apps:
+  local_inference:
+    enabled: true
+    public_access_enabled: false   # opt-in, on top of the LAN/in-cluster default
+    public_access_cloudflare_access_confirmed: false   # required if the line above is true
+```
+
+The llama-swap API key still applies on the public path too - Cloudflare
+Access and the app-level key are meant to layer, not substitute for each
+other.
 
 Auth mechanism: an API key checked by `llama-swap` itself, not Traefik
 BasicAuth. It sends `Authorization: Bearer <key>`, the convention every
@@ -1237,10 +1271,19 @@ apply. Like the rest of this repo's GitOps apps, `platform-local-inference`
 syncs with `prune: false` - disabling the flag drops it from the rendered
 Application set but does **not** delete anything. Argo CD leaves the
 orphaned `platform-local-inference` Application (and its Deployment, PVC,
-ConfigMap, Ingress, Middleware, Secrets) in place, OutOfSync, until a human
-removes them manually, e.g. `kubectl delete -k kubernetes/apps/local-inference`
-plus `kubectl delete application platform-local-inference -n argocd`. Only
-then does the node return to general-purpose scheduling.
+ConfigMap, Service, and - if `public_access_enabled` was ever true - Ingress
+and Secrets) in place, OutOfSync, until a human removes them manually, e.g.
+`kubectl delete -k kubernetes/apps/local-inference/base` (or
+`overlays/public-access`, whichever was last applied - check
+`kubectl get application platform-local-inference -n argocd -o
+jsonpath='{.spec.source.path}'` if unsure) plus `kubectl delete application
+platform-local-inference -n argocd`. Only then does the node return to
+general-purpose scheduling. Disabling `public_access_enabled` alone (leaving
+`enabled: true`) is narrower: it switches the Application back to `base` on
+the next sync, which - same `prune: false` caveat - leaves the Ingress
+orphaned rather than removing it; delete it manually
+(`kubectl delete -k kubernetes/apps/local-inference/overlays/public-access`)
+if the public path is being turned off deliberately.
 
 ### Host Disk Pressure Check
 

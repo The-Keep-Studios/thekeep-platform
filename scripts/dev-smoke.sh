@@ -359,7 +359,8 @@ smoke_local_inference() {
     --from-literal=API_KEY="${dev_api_key}" \
     --dry-run=client -o yaml | kubectl apply -f -
 
-  kubectl apply -k kubernetes/apps/local-inference
+  # base only - the dev k3d cluster never needs the public-access overlay.
+  kubectl apply -k kubernetes/apps/local-inference/base
   kubectl rollout status deploy/local-inference -n local-inference --timeout="${wait_timeout}"
   assert_deployment_available local-inference local-inference
 
