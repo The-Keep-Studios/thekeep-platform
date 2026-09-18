@@ -19,6 +19,7 @@ It uses Ansible to provision machines, k3s to run workloads, and Argo CD to keep
 - [Auth, OIDC, And Routing Notes](#auth-oidc-and-routing-notes)
 - [Optional CRM And Assistant](#optional-crm-and-assistant)
 - [GPU Inference Host Prep (Strix Halo)](#gpu-inference-host-prep-strix-halo)
+- [Local Inference (Strix Halo)](#local-inference-strix-halo)
 - [Host Disk Pressure Check](#host-disk-pressure-check)
 - [k3s DiskPressure Recovery Runbook](#k3s-diskpressure-recovery-runbook)
 - [Planned Hardening](#planned-hardening)
@@ -1190,6 +1191,145 @@ until #91's app slice lands. For planning, a ~46GB model plus a game's
 working set fits the confirmed 96GB BIOS VGM split; revisit only if memory
 pressure actually appears.
 
+### Local Inference (Strix Halo)
+
+App-layer slice for #91, building on the host prep above (#92):
+`kubernetes/apps/local-inference/*` plus the matching Ansible/monitoring/
+validation wiring below. Everything stays inert until a human deliberately
+sets `platform_optional_apps.local_inference.enabled: true` and fills in
+its required secrets - this Kubernetes app has not been applied to the
+real Strix Halo host yet.
+
+The GPU access path and all three shortlisted models it configures do now
+have real hardware evidence, though - see "Real hardware evidence" under
+[GPU Inference Host Prep](#gpu-inference-host-prep-strix-halo) above for
+the `llama-bench` numbers. That evidence is bare `llama.cpp` run directly
+on the host, not through this app's `llama-swap` container, so the
+Deployment/PVC/Service here are still unverified end-to-end.
+
+```yaml
+platform_optional_apps:
+  local_inference:
+    enabled: false
+```
+
+Required secret once enabled, in ignored `ansible/production_vars.yml` -
+this is the service's own credential, not a fallback to Grafana's
+basic-auth pair:
+
+```yaml
+platform_secrets:
+  local_inference_api_key: "CHANGE_ME"
+```
+
+**No public hostname by default - LAN and in-cluster only.**
+`kubernetes/apps/local-inference/base` is what applies whenever
+`platform_optional_apps.local_inference.enabled: true`, and it never adds an
+Ingress, a hostname, or anything routed through the platform's shared
+Cloudflare Tunnel. The service is reachable two ways:
+
+- **In-cluster**, via the `local-inference` Service's cluster DNS name
+  (`local-inference.local-inference.svc.cluster.local:8080`) - any pod in the
+  cluster can call it, the same pattern the EspoCRM assistant already uses for
+  its own in-cluster consumers.
+- **LAN**, via a `NodePort` (`30880`) bound to the node's own network
+  interfaces. A trusted device on the home network - a workstation running
+  JetBrains AI Assistant, Continue, or a similar OpenAI-compatible tool - can
+  reach `http://<node-lan-ip>:30880` directly. This never leaves the LAN on
+  its own: nothing here forwards the port to the public internet, and it must
+  stay that way unless someone deliberately configures port-forwarding at the
+  router, which this platform does not do and should not need to.
+
+`llama-swap`'s own `apiKeys` check (`Authorization: Bearer <key>`, the
+convention every OpenAI-compatible client already speaks - see below) still
+applies on every request through either path. That matters more on the LAN
+path: any device on the network can reach the NodePort, not just your own
+workstation, so the API key is the only thing standing between "on your LAN"
+and "can call the model." Worth being precise about what that key is and
+isn't protecting against: the inference API is a text-in/text-out completion
+endpoint, not an agent with host access - it cannot execute commands on the
+node through this surface no matter who holds the key. What the key
+(and the LAN boundary generally) protects against is unauthorized *use* -
+someone else's device burning GPU time or extracting output from a model
+they weren't meant to reach - and the separate, narrower concern that the
+container itself runs `privileged: true` with raw `/dev/kfd`/`/dev/dri`
+access (see the Deployment) for the GPU passthrough gfx1151 currently has
+no clean device-plugin story for; that's a container-escape surface tied to
+the pod's own security context, unrelated to what a prompt sent to the API
+can do.
+
+**A public hostname is opt-in and requires a real Cloudflare Access policy
+first - not just built and left disabled.**
+`platform_optional_apps.local_inference.public_access_enabled: true` switches
+the Argo Application's source path from `base` to
+`overlays/public-access`, which layers an Ingress + the proposed
+`inference.thekeepstudios.com` hostname on top of the same base. Enabling it
+also requires `public_access_cloudflare_access_confirmed: true` - a human
+self-attestation that a Cloudflare Access policy (Zero Trust -> Access ->
+Applications) already protects that hostname, *before* it's added to the
+tunnel's Public Hostname list. `setup_k3s_production.yml` refuses to run
+without that confirmation; Ansible cannot verify a Cloudflare dashboard
+setting, so this is honesty-based, not enforced - the flag existing is not
+the same as the policy existing. Registering the hostname itself in the
+tunnel is still the same kind of manual step as the "Cloudflare
+Prerequisite" section above, and is not performed by any PR.
+
+```yaml
+platform_optional_apps:
+  local_inference:
+    enabled: true
+    public_access_enabled: false   # opt-in, on top of the LAN/in-cluster default
+    public_access_cloudflare_access_confirmed: false   # required if the line above is true
+```
+
+The llama-swap API key still applies on the public path too - Cloudflare
+Access and the app-level key are meant to layer, not substitute for each
+other.
+
+Auth mechanism: an API key checked by `llama-swap` itself, not Traefik
+BasicAuth. It sends `Authorization: Bearer <key>`, the convention every
+OpenAI-compatible client (JetBrains AI Assistant, Continue, and similar
+coding-assistant tools included) expects natively - an earlier draft used
+Traefik BasicAuth, mirroring the existing Prometheus/Alertmanager stopgap,
+but BasicAuth's username/password challenge is not what these clients send;
+their "API key" field goes out as a Bearer token, so a BasicAuth Middleware
+would just reject them. Do not attach `identity-authentik-forward-auth` to
+this endpoint even if a public path is added later - forward-auth is a
+browser redirect flow and cannot serve a non-interactive OpenAI-compatible
+client.
+
+Yielding to the gaming workload uses two mechanisms from #91. `llama-swap`'s
+idle TTL unloads models automatically and is the primary mechanism - the pod
+and `/v1/models` stay up through an unload, so an idle evening does not read
+as an outage. For a hard guarantee before a heavy title, a Steam launch
+option can force an unload first:
+
+```
+bash -c 'curl -fsS -X POST http://<svc>/unload || true; %command%'
+```
+
+`|| true` is deliberate: a broken or unreachable curl must fail open and
+never block a game from starting.
+
+Rollback: set `platform_optional_apps.local_inference.enabled: false` and
+apply. Like the rest of this repo's GitOps apps, `platform-local-inference`
+syncs with `prune: false` - disabling the flag drops it from the rendered
+Application set but does **not** delete anything. Argo CD leaves the
+orphaned `platform-local-inference` Application (and its Deployment, PVC,
+ConfigMap, Service, and - if `public_access_enabled` was ever true - Ingress
+and Secrets) in place, OutOfSync, until a human removes them manually, e.g.
+`kubectl delete -k kubernetes/apps/local-inference/base` (or
+`overlays/public-access`, whichever was last applied - check
+`kubectl get application platform-local-inference -n argocd -o
+jsonpath='{.spec.source.path}'` if unsure) plus `kubectl delete application
+platform-local-inference -n argocd`. Only then does the node return to
+general-purpose scheduling. Disabling `public_access_enabled` alone (leaving
+`enabled: true`) is narrower: it switches the Application back to `base` on
+the next sync, which - same `prune: false` caveat - leaves the Ingress
+orphaned rather than removing it; delete it manually
+(`kubectl delete -k kubernetes/apps/local-inference/overlays/public-access`)
+if the public path is being turned off deliberately.
+
 ### Host Disk Pressure Check
 
 Run the read-only host disk check before or during cluster triage, and
@@ -1328,6 +1468,7 @@ This is the backlog for moving from production-like to high availability:
 
 - k3s production bootstrap playbook: `ansible/setup_k3s_production.yml`
 - GPU inference host prep role (#91/#92): `ansible/roles/gpu_inference_host/*`
+- Local inference app manifests (#91, disabled by default): `kubernetes/apps/local-inference/*`
 - Argo platform install: `kubernetes/platform/argocd/*`
 - Cloudflare Tunnel edge deployment: `kubernetes/platform/cloudflared/*`
 - GitOps apps/root: `kubernetes/gitops/*`

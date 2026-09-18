@@ -41,6 +41,14 @@ platform_secrets:
   # Protects /approval/apply-change; share only with the approved executor path.
   espocrm_assistant_apply_token: "CHANGE_ME"
 
+  # Optional: local GPU inference (#91). Requires
+  # platform_optional_apps.local_inference.enabled: true. Own credential -
+  # never falls back to monitoring/grafana's basic-auth pair. Checked by
+  # llama-swap itself as "Authorization: Bearer <key>" - the convention
+  # OpenAI-compatible clients (JetBrains AI Assistant, Continue, etc.) expect
+  # natively - not a Traefik BasicAuth username/password challenge.
+  local_inference_api_key: "CHANGE_ME"
+
 # Optional CRM app toggles. Baserow remains the core relationship-management app.
 # platform_optional_apps:
 #   twenty:
@@ -56,6 +64,23 @@ platform_secrets:
 #   espocrm_assistant:
 #     # Requires espocrm.enabled: true. The assistant does not enable EspoCRM.
 #     enabled: false
+#   local_inference:
+#     # PROPOSED default (#91): app-shaped but platform-consumed, matching the
+#     # kubernetes/apps/<name> convention. Path convention is pending human
+#     # decision per #91's TODO ledger - not final. Also requires host prep
+#     # from gpu_inference_host_enabled below.
+#     enabled: false
+#     # Opt-in, separate from the line above: adds a public hostname via the
+#     # existing Cloudflare Tunnel instead of staying LAN/in-cluster only.
+#     # Requires public_access_cloudflare_access_confirmed below, or the
+#     # playbook refuses to run (see setup_k3s_production.yml).
+#     public_access_enabled: false
+#     # Self-attestation, not something Ansible can verify: set true only
+#     # once a Cloudflare Access policy already protects this hostname in
+#     # the Zero Trust dashboard (Access -> Applications), BEFORE adding it
+#     # to the tunnel's Public Hostname list. Without a real Access policy
+#     # this flag lies to the playbook - it does not create one for you.
+#     public_access_cloudflare_access_confirmed: false
 
 # Optional: enable these only when gitops_repo_private is true.
 # gitops_repo_ssh_private_key_path: "/path/to/argocd-readonly-key"

@@ -1,0 +1,76 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: local-inference-models
+  namespace: local-inference
+data:
+  # llama-swap config: https://github.com/mostlygeek/llama-swap
+  config.yaml: |
+    # No groups/routing defined below, so llama-swap's default applies: one
+    # model resident at a time, swapping on demand. That matches #91's
+    # "hot-swap instead of pinning 60GB permanently" intent on a node that
+    # also has to serve games.
+    logLevel: info
+    # Default is 120s; a 46GB weight file may not mmap/load that fast. Raised
+    # as an unbenchmarked starting point - #91's acceptance criteria calls for
+    # real load-time evidence before this is treated as tuned.
+    healthCheckTimeout: 300
+
+    # Requires "Authorization: Bearer <key>" on every request - the same
+    # convention OpenAI-compatible clients (JetBrains AI Assistant, Continue,
+    # etc.) send natively, unlike Traefik BasicAuth's username/password
+    # challenge. Value comes from the LOCAL_INFERENCE_API_KEY env var (see
+    # production.yaml), sourced from the local-inference-api-key Secret -
+    # never baked into this ConfigMap directly.
+    apiKeys:
+      - "${env.LOCAL_INFERENCE_API_KEY}"
+
+    models:
+      "qwen3-coder-next-80b-a3b":
+        name: "Qwen3-Coder-Next 80B-A3B (IQ4_XS)"
+        description: "Primary agentic/coding seat, ~46GB resident"
+        # Confirmed real filename - downloaded from unsloth/Qwen3-Coder-Next-GGUF
+        # and llama-bench'd on the actual host (see #108's README evidence).
+        # Not sharded - one file, 42,676,135,968 bytes.
+        cmd: |
+          llama-server
+          --port ${PORT}
+          --model /models/Qwen3-Coder-Next-IQ4_XS.gguf
+          --ctx-size 32768
+          --n-gpu-layers 999
+        # mmap left on (no --no-mmap): #91 notes the ROCm runbook's --no-mmap
+        # advice trades cold-load latency for eager loading, which is the
+        # wrong tradeoff here since this seat unloads/reloads daily via ttl.
+        # ttl (seconds) is an unbenchmarked starting point, pending the
+        # idle-TTL verification in #91's acceptance criteria.
+        ttl: 900
+
+      "qwen3.6-35b-a3b":
+        name: "Qwen3.6 35B-A3B (UD-Q4_K_S)"
+        description: "General assistant/triage seat, ~19.5GB resident"
+        # Confirmed real filename - downloaded from unsloth/Qwen3.6-35B-A3B-GGUF
+        # and llama-bench'd on the actual host (see #108's README evidence).
+        cmd: |
+          llama-server
+          --port ${PORT}
+          --model /models/Qwen3.6-35B-A3B-UD-Q4_K_S.gguf
+          --ctx-size 32768
+          --n-gpu-layers 999
+        ttl: 900
+
+      "qwen3-coder-30b-a3b":
+        name: "Qwen3-Coder-30B-A3B-Instruct (Q4_K_S)"
+        description: "Fast/cheap classification seat, ~16GB resident"
+        # Confirmed real filename - downloaded from
+        # unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF and llama-bench'd on the
+        # actual host (see #108's README evidence).
+        cmd: |
+          llama-server
+          --port ${PORT}
+          --model /models/Qwen3-Coder-30B-A3B-Instruct-Q4_K_S.gguf
+          --ctx-size 8192
+          --n-gpu-layers 999
+        # Shorter context than the other two seats: classification prompts
+        # are short, and this seat leaves more headroom for whichever
+        # heavier seat is also resident during a swap.
+        ttl: 900

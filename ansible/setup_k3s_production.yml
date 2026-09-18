@@ -95,6 +95,8 @@
         platform_optional_twenty_enabled: "{{ ((platform_optional_apps | default({})).twenty | default({})).enabled | default(false) | bool }}"
         platform_optional_espocrm_enabled: "{{ ((platform_optional_apps | default({})).espocrm | default({})).enabled | default(false) | bool }}"
         platform_optional_espocrm_assistant_enabled: "{{ ((platform_optional_apps | default({})).espocrm_assistant | default({})).enabled | default(false) | bool }}"
+        platform_optional_local_inference_enabled: "{{ ((platform_optional_apps | default({})).local_inference | default({})).enabled | default(false) | bool }}"
+        platform_optional_local_inference_public_access_enabled: "{{ ((platform_optional_apps | default({})).local_inference | default({})).public_access_enabled | default(false) | bool }}"
       tags: [always]
 
     - name: Fail if EspoCRM assistant is enabled without EspoCRM
@@ -103,6 +105,34 @@
       when:
         - platform_optional_espocrm_assistant_enabled | bool
         - not (platform_optional_espocrm_enabled | bool)
+      tags: [always]
+
+    - name: Fail if local_inference is enabled without its host prep
+      ansible.builtin.fail:
+        msg: >-
+          platform_optional_apps.local_inference.enabled requires
+          gpu_inference_host_enabled (see #92) - the app has nowhere to
+          schedule without the GPU host-prep role having labeled the node.
+      when:
+        - platform_optional_local_inference_enabled | bool
+        - not (gpu_inference_host_enabled | default(false) | bool)
+      tags: [always]
+
+    - name: Fail if local_inference public access is enabled without confirmed Cloudflare Access protection
+      ansible.builtin.fail:
+        msg: >-
+          platform_optional_apps.local_inference.public_access_enabled
+          requires public_access_cloudflare_access_confirmed: true - a
+          human self-attestation that a Cloudflare Access policy already
+          protects this hostname in the Zero Trust dashboard (Access ->
+          Applications) before it's added to the tunnel's Public Hostname
+          list. Ansible cannot verify a Cloudflare dashboard setting -
+          enabling public access without this confirmed exposes the
+          endpoint to the public internet behind only the app-level API
+          key, not the hardened path #91 calls for.
+      when:
+        - platform_optional_local_inference_public_access_enabled | bool
+        - not (((platform_optional_apps | default({})).local_inference | default({})).public_access_cloudflare_access_confirmed | default(false) | bool)
       tags: [always]
 
     - name: Validate EspoCRM email configuration
@@ -122,7 +152,8 @@
               'espocrm_assistant_write_api_key',
               'espocrm_assistant_token',
               'espocrm_assistant_apply_token'
-            ] if (platform_optional_espocrm_assistant_enabled | bool) else [])
+            ] if (platform_optional_espocrm_assistant_enabled | bool) else []) +
+            (['local_inference_api_key'] if (platform_optional_local_inference_enabled | bool) else [])
           }}
       tags: [always]
 

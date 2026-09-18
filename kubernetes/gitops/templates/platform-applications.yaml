@@ -112,6 +112,35 @@ spec:
     - CreateNamespace=true
     - ServerSideApply=true
 {% endif %}
+{% if ((platform_optional_apps | default({})).local_inference | default({})).enabled | default(false) | bool %}
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: platform-local-inference
+  namespace: argocd
+spec:
+  project: platform
+  source:
+    repoURL: "{{ gitops_repo_url }}"
+    targetRevision: "{{ gitops_revision }}"
+    # Default is the LAN/in-cluster-only base overlay - the public overlay
+    # (adds the Ingress) is opt-in, see public_access_enabled below.
+    path: >-
+      kubernetes/apps/local-inference/{{ 'overlays/public-access' if
+      (((platform_optional_apps | default({})).local_inference | default({})).public_access_enabled | default(false) | bool)
+      else 'base' }}
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: local-inference
+  syncPolicy:
+    automated:
+      prune: false
+      selfHeal: true
+    syncOptions:
+    - CreateNamespace=true
+    - ServerSideApply=true
+{% endif %}
 ---
 apiVersion: argoproj.io/v1alpha1
 kind: Application

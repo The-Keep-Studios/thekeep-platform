@@ -81,6 +81,12 @@ diagnostics_optional_crm() {
   kubectl logs deploy/espocrm-daemon -n espocrm --all-containers --tail=200 || true
 }
 
+diagnostics_local_inference() {
+  kubectl get pods,deploy,svc,pvc -n local-inference || true
+  kubectl describe deploy/local-inference -n local-inference || true
+  kubectl logs deploy/local-inference -n local-inference --all-containers --tail=200 || true
+}
+
 smoke_wisemapping() {
   local probe_host="${WISEMAPPING_PROBE_HOST:-mindmaps.thekeepstudios.com}"
   local wait_timeout="${WISEMAPPING_WAIT_TIMEOUT:-${DEFAULT_WAIT_TIMEOUT}}"
@@ -329,6 +335,57 @@ smoke_espocrm() {
   echo "EspoCRM smoke test passed"
 }
 
+smoke_local_inference() {
+  local wait_timeout="${LOCAL_INFERENCE_WAIT_TIMEOUT:-${DEFAULT_WAIT_TIMEOUT}}"
+  # llama-swap's own apiKeys check (not Traefik BasicAuth - there's no
+  # Ingress here at all, see #91's LAN-only-NodePort decision), dev-only key.
+  local dev_api_key="${LOCAL_INFERENCE_DEV_API_KEY:-dev-local-inference-key-not-for-production}"
+  local accelerator_nodes
+  local probe_name
+  local probe_output
+
+  echo "== Local Inference smoke =="
+
+  # The k3d dev cluster never has a Strix Halo node or real GPU; #91 requires
+  # a graceful skip here instead of failing on every machine but the real one.
+  accelerator_nodes="$(kubectl get nodes -l thekeep.studio/accelerator=strix-halo -o name)"
+  if [ -z "${accelerator_nodes}" ]; then
+    echo "No node labeled thekeep.studio/accelerator=strix-halo; skipping local-inference smoke (this cluster has no compatible GPU)."
+    return 0
+  fi
+
+  kubectl create namespace local-inference --dry-run=client -o yaml | kubectl apply -f -
+  kubectl create secret generic local-inference-api-key -n local-inference \
+    --from-literal=API_KEY="${dev_api_key}" \
+    --dry-run=client -o yaml | kubectl apply -f -
+
+  # base only - the dev k3d cluster never needs the public-access overlay.
+  kubectl apply -k kubernetes/apps/local-inference/base
+  kubectl rollout status deploy/local-inference -n local-inference --timeout="${wait_timeout}"
+  assert_deployment_available local-inference local-inference
+
+  probe_name="local-inference-smoke-$(date +%s)"
+  probe_output="$(kubectl run -n local-inference "${probe_name}" \
+    --rm=true \
+    --attach=true \
+    -i \
+    --restart=Never \
+    --image="${PROBE_IMAGE}" \
+    --quiet=true \
+    -- \
+    sh -ceu '
+      curl -fsS --max-time 20 \
+        -H "Authorization: Bearer '"${dev_api_key}"'" \
+        http://local-inference:8080/v1/models > /tmp/local-inference-models.json
+      grep -Eq "\"object\"[[:space:]]*:[[:space:]]*\"list\"" /tmp/local-inference-models.json
+      cat /tmp/local-inference-models.json
+    ' 2>&1)"
+  echo "${probe_output}"
+  grep -Eq "\"object\"[[:space:]]*:[[:space:]]*\"list\"" <<< "${probe_output}"
+
+  echo "Local Inference smoke test passed"
+}
+
 run_target() {
   local target="$1"
   local concrete_target
@@ -361,6 +418,12 @@ run_target() {
     espocrm)
       if ! smoke_espocrm; then
         diagnostics_optional_crm
+        return 1
+      fi
+      ;;
+    local-inference)
+      if ! smoke_local_inference; then
+        diagnostics_local_inference
         return 1
       fi
       ;;
