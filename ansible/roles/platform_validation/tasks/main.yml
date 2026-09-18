@@ -8,6 +8,7 @@
     platform_validation_twenty_enabled: "{{ ((platform_optional_apps | default({})).twenty | default({})).enabled | default(false) | bool }}"
     platform_validation_espocrm_enabled: "{{ ((platform_optional_apps | default({})).espocrm | default({})).enabled | default(false) | bool }}"
     platform_validation_local_inference_enabled: "{{ ((platform_optional_apps | default({})).local_inference | default({})).enabled | default(false) | bool }}"
+    platform_validation_local_inference_public_access_enabled: "{{ ((platform_optional_apps | default({})).local_inference | default({})).public_access_enabled | default(false) | bool }}"
     platform_validation_leantime_mcp_enabled: "{{ (platform_leantime_mcp | default({})).enabled | default(false) | bool }}"
     platform_validation_leantime_mcp_path: "{{ (platform_leantime_mcp | default({})).endpoint_path | default('/mcp') }}"
 
@@ -768,9 +769,9 @@
     url: "{{ item }}"
     status_code: [200, 401, 403]
     timeout: 15
-  # local-inference deliberately absent: LAN-only via NodePort, never a public
-  # hostname - see kubernetes/apps/local-inference (#91/#110).
-  loop: "{{ ['https://auth.thekeepstudios.com', 'https://projects.thekeepstudios.com', 'https://mindmaps.thekeepstudios.com', 'https://baserow.thekeepstudios.com', 'https://crm.thekeepstudios.com', 'https://grafana.thekeepstudios.com', 'https://prometheus.thekeepstudios.com', 'https://alerts.thekeepstudios.com', 'https://argocd.thekeepstudios.com'] + (['https://twenty.thekeepstudios.com'] if (platform_validation_twenty_enabled | bool) else []) + (['https://espocrm.thekeepstudios.com'] if (platform_validation_espocrm_enabled | bool) else []) }}"
+  # local-inference only appears here when public_access_enabled - the
+  # default is LAN-only via NodePort, never a public hostname (#91/#110).
+  loop: "{{ ['https://auth.thekeepstudios.com', 'https://projects.thekeepstudios.com', 'https://mindmaps.thekeepstudios.com', 'https://baserow.thekeepstudios.com', 'https://crm.thekeepstudios.com', 'https://grafana.thekeepstudios.com', 'https://prometheus.thekeepstudios.com', 'https://alerts.thekeepstudios.com', 'https://argocd.thekeepstudios.com'] + (['https://twenty.thekeepstudios.com'] if (platform_validation_twenty_enabled | bool) else []) + (['https://espocrm.thekeepstudios.com'] if (platform_validation_espocrm_enabled | bool) else []) + (['https://inference.thekeepstudios.com'] if (platform_validation_local_inference_public_access_enabled | bool) else []) }}"
   when: require_external_https | default(true) | bool
 
 - name: Verify protected endpoints require authentication
@@ -779,7 +780,7 @@
     status_code: [401, 403]
     timeout: 15
     follow_redirects: all
-  loop: "{{ ['https://crm.thekeepstudios.com', 'https://prometheus.thekeepstudios.com', 'https://alerts.thekeepstudios.com'] }}"
+  loop: "{{ ['https://crm.thekeepstudios.com', 'https://prometheus.thekeepstudios.com', 'https://alerts.thekeepstudios.com'] + (['https://inference.thekeepstudios.com'] if (platform_validation_local_inference_public_access_enabled | bool) else []) }}"
   when: require_external_https | default(true) | bool
 
 - name: Ensure direct_http_urls is not empty when HTTPS is required
