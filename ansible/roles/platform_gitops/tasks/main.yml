@@ -265,6 +265,8 @@
       enabled: "{{ ((platform_optional_apps | default({})).twenty | default({})).enabled | default(false) | bool }}"
     - name: espocrm
       enabled: "{{ ((platform_optional_apps | default({})).espocrm | default({})).enabled | default(false) | bool }}"
+    - name: local-inference
+      enabled: "{{ ((platform_optional_apps | default({})).local_inference | default({})).enabled | default(false) | bool }}"
   when: item.enabled | bool
   changed_when: >
     optional_namespace_apply.stdout is defined and
@@ -359,10 +361,23 @@
       data:
         username: "{{ platform_secrets.monitoring_basic_auth_user | default(platform_secrets.grafana_admin_user) }}"
         password: "{{ platform_secrets.monitoring_basic_auth_password | default(platform_secrets.grafana_admin_password) }}"
+    - name: local-inference-api-key
+      namespace: local-inference
+      # Own credential - never falls back to monitoring/grafana's basic-auth pair.
+      # Checked by llama-swap itself (its own apiKeys config, matching the
+      # OpenAI "Authorization: Bearer <key>" convention every OpenAI-compatible
+      # client - JetBrains AI Assistant, Continue, etc. - expects natively), not
+      # by a Traefik middleware.
+      enabled: "{{ ((platform_optional_apps | default({})).local_inference | default({})).enabled | default(false) | bool }}"
+      data:
+        API_KEY: "{{ platform_secrets.local_inference_api_key | default('') }}"
     - name: cloudflare-tunnel-token
       namespace: kube-system
       data:
         token: "{{ platform_secrets.cloudflare_tunnel_token }}"
+  # Only local-inference-api-key sets item.enabled - every other entry here
+  # is a core secret and stays unconditional.
+  when: item.enabled | default(true) | bool
 
 - name: Apply Twenty optional app secret
   ansible.builtin.command:

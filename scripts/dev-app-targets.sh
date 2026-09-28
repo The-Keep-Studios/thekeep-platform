@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-DEV_APP_TARGET_USAGE="wisemapping|leantime|baserow|twenty|espocrm|optional-crm|crm-bakeoff|platform"
+DEV_APP_TARGET_USAGE="wisemapping|leantime|baserow|twenty|espocrm|local-inference|optional-crm|crm-bakeoff|platform"
 
 dev_app_print_usage() {
   local script_name="$1"
@@ -11,7 +11,7 @@ dev_app_print_usage() {
 
 dev_app_is_target() {
   case "$1" in
-    wisemapping|leantime|baserow|twenty|espocrm|optional-crm|crm-bakeoff|platform)
+    wisemapping|leantime|baserow|twenty|espocrm|local-inference|optional-crm|crm-bakeoff|platform)
       return 0
       ;;
     *)
@@ -28,7 +28,7 @@ dev_app_expand_target() {
     optional-crm|crm-bakeoff)
       printf '%s\n' twenty espocrm
       ;;
-    wisemapping|leantime|baserow|twenty|espocrm)
+    wisemapping|leantime|baserow|twenty|espocrm|local-inference)
       printf '%s\n' "$1"
       ;;
     *)
@@ -90,6 +90,21 @@ dev_app_observe_config() {
       APP_PROBE_PATH="/"
       APP_PROBE_PATTERN="espocrm|login|username|password"
       APP_CONFIG_KIND="espocrm"
+      ;;
+    local-inference)
+      APP_NAMESPACE="local-inference"
+      APP_SERVICE="local-inference"
+      APP_DEPLOYMENT="local-inference"
+      APP_PORT="${LOCAL_INFERENCE_OBSERVE_PORT:-18085}"
+      # No public hostname (#91: LAN-only via NodePort, no Ingress) - the
+      # Host header other apps' probes simulate for Traefik routing doesn't
+      # apply here, so this is just the port-forwarded local address.
+      APP_HOST="127.0.0.1:${APP_PORT}"
+      APP_PROBE_PATH="/v1/models"
+      APP_PROBE_PATTERN="\"object\":\\s*\"model\"|\"data\":"
+      APP_CONFIG_KIND="local-inference"
+      # No patch_local_config case below: this is a JSON API with no separate
+      # public-URL setting, unlike the SPA-style apps above.
       ;;
     *)
       echo "Unknown concrete dev app target: ${target}" >&2
