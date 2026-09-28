@@ -3,3 +3,4 @@ kind: Kustomization
 resources:
 - production.yaml
 - configmap.models.yaml
+- local-pv.yaml

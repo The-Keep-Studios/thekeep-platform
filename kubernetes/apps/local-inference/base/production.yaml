@@ -11,13 +11,17 @@ metadata:
   name: local-inference-model-cache
   namespace: local-inference
 spec:
+  # Binds to the static PV in local-pv.yaml - a dedicated external drive,
+  # not the node's root disk (which has nowhere near 200Gi free once every
+  # other app's storage is accounted for).
+  storageClassName: local-inference-model-cache
   accessModes:
   - ReadWriteOnce
   resources:
     requests:
-      # PROPOSED: covers the #91 model shortlist (~46GB + ~20GB + ~17GB) plus
-      # headroom for a swap-in-progress and future models. Revisit against the
-      # host's real free disk capacity.
+      # Confirmed against real capacity: covers the #91 model shortlist
+      # (~46GB + ~20GB + ~17GB) plus headroom for a swap-in-progress and
+      # future models, comfortably inside the drive's ~505G free.
       storage: 200Gi
 ---
 apiVersion: apps/v1

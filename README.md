@@ -1207,6 +1207,23 @@ the `llama-bench` numbers. That evidence is bare `llama.cpp` run directly
 on the host, not through this app's `llama-swap` container, so the
 Deployment/PVC/Service here are still unverified end-to-end.
 
+**Model cache is backed by a dedicated external drive, not the node's root
+disk.** The root disk had only ~111G free once every other app's storage
+was accounted for - nowhere near enough for a 200Gi PVC. `local-pv.yaml`
+statically provisions that 200Gi against a Framework expansion-card drive
+instead (~505G free at the time this was set up), via a `local`
+PersistentVolume and its own no-provisioner `StorageClass` - the one
+exception to every other app in this platform relying on k3s's default
+dynamic local-path provisioner. This is an interim, host-specific setup:
+the path is tied to this one box's session-scoped auto-mount and a
+personal username, not a stable system mount point, and the drive stays
+NTFS rather than being reformatted, since it already held other data (an
+old backup, a Steam library) not worth risking for a workload - large
+binary model files, no symlinks or special permissions needed - that
+doesn't actually benefit from a native filesystem here. Move this to a
+permanent, non-personal `/etc/fstab` mount before treating it as the
+template other consumers of this platform would copy.
+
 ```yaml
 platform_optional_apps:
   local_inference:
