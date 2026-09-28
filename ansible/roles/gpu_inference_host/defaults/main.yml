@@ -1,0 +1,29 @@
+# Refs #91, #92. Host prep only - no cluster workload, no endpoint.
+gpu_inference_host_enabled: false
+
+# Required once enabled - no guessed default. Prevents this role from ever
+# touching a host it wasn't deliberately confirmed for (see tasks/main.yml).
+gpu_inference_host_expected_product_name: ""
+
+# kisak-mesa PPA pin. Required once enabled - "track the PPA head" is a risk
+# called out in #91, not a default to fall into silently.
+gpu_inference_host_mesa_ppa: "ppa:kisak/kisak-mesa"
+gpu_inference_host_mesa_pinned_version: ""
+
+gpu_inference_host_tuned_profile: throughput-performance
+gpu_inference_host_node_label_key: "thekeep.studio/accelerator"
+gpu_inference_host_node_label_value: "strix-halo"
+
+# Which display-session type the greeter defaults to. Empty (default) leaves
+# today's manual choice at the greeter alone - #92/#91's X11-vs-Wayland
+# comparison is still open, pending real llama-bench evidence under each.
+# Set to "x11" or "wayland" once that's settled, per-host, and the role
+# configures the greeter's default session to match - no branching needed,
+# a future host (or a changed answer on this one) is just a different value.
+gpu_inference_host_display_session: ""
+
+# LightDM session-file names for each type, mapped to this host's actual
+# desktop environment (Cinnamon). A future host on a different DE overrides
+# these two - the x11/wayland decision itself is what stays open, not these.
+gpu_inference_host_display_session_name_x11: cinnamon
+gpu_inference_host_display_session_name_wayland: cinnamon-wayland

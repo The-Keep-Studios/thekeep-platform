@@ -121,3 +121,11 @@ platform_secrets:
 # platform_leantime_mcp:
 #   enabled: true
 #   endpoint_path: /mcp
+
+# Optional: host-prep only for local GPU inference (#91, #92). No cluster
+# workload. Refuses to run unless the DMI product name and a benchmarked
+# Mesa version are both set explicitly - see README's GPU Inference Host Prep
+# section.
+# gpu_inference_host_enabled: true
+# gpu_inference_host_expected_product_name: "CHANGE_ME"
+# gpu_inference_host_mesa_pinned_version: "CHANGE_ME"

@@ -18,6 +18,7 @@ It uses Ansible to provision machines, k3s to run workloads, and Argo CD to keep
 - [Operations Runbook](#operations-runbook)
 - [Auth, OIDC, And Routing Notes](#auth-oidc-and-routing-notes)
 - [Optional CRM And Assistant](#optional-crm-and-assistant)
+- [GPU Inference Host Prep (Strix Halo)](#gpu-inference-host-prep-strix-halo)
 - [Host Disk Pressure Check](#host-disk-pressure-check)
 - [k3s DiskPressure Recovery Runbook](#k3s-diskpressure-recovery-runbook)
 - [Planned Hardening](#planned-hardening)
@@ -1093,6 +1094,102 @@ Migration safety:
 - Most GitOps app definitions use `prune: false` to reduce accidental deletion risk during migration. The Loki app enables pruning because chart migration requires stale resource cleanup.
 - `bootstrap-production.sh` is removed. Day-2 changes happen through Git and Argo CD.
 
+### GPU Inference Host Prep (Strix Halo)
+
+Host prep only, for #91/#92 under parent #15. No cluster workload, no
+exposed endpoint yet - `gpu_inference_host_enabled` defaults to `false` and
+the role refuses to run without both vars below set explicitly.
+
+```yaml
+gpu_inference_host_enabled: true
+gpu_inference_host_expected_product_name: "CHANGE_ME"   # dmidecode -s system-product-name
+gpu_inference_host_mesa_pinned_version: "CHANGE_ME"      # benchmark first, then pin
+```
+
+Manual BIOS/firmware steps (cannot be automated - verify and record before
+enabling the role):
+
+- Confirm the UMA frame buffer / GTT split, and record the exact value used.
+- Confirm IOMMU is enabled if intended kernel params require it.
+- Record `dmidecode -s system-product-name` as
+  `gpu_inference_host_expected_product_name` - this is the only guard
+  keeping the role from running on an unconfirmed machine.
+
+Mesa/RADV is pinned from the `kisak-mesa` PPA and held via
+`dpkg_selections` so unattended upgrades can't move it. Benchmark before
+pinning a version - this Mesa build is shared with the gaming workload on
+the same node (see #91), so a bump chased for one side can regress the
+other.
+
+Node label `thekeep.studio/accelerator=strix-halo` is applied once k3s is
+present. gfx1151 has no clean `amd.com/gpu` device-plugin story, so a future
+inference workload targets this node with a `nodeSelector` against this
+label, not an extended resource.
+
+Benchmark command template - run under both X11 and Wayland sessions:
+
+```bash
+llama-bench -m <model.gguf> -b <backend, e.g. Vulkan> -ngl 999
+```
+
+Record backend, model, quant, build number, and exact flags alongside the
+t/s result; a number without the command isn't evidence.
+
+Real evidence gathered against the host over SSH (prebuilt `llama.cpp`
+Vulkan release, build `38a5b42d9` / b10989, `AMD Radeon 8060S Graphics
+(RADV STRIX_HALO)`, Mesa `26.2.2~kisak1~n` from `kisak-mesa`,
+`llama-bench -m <model.gguf> -ngl 999`) for all three models #91
+shortlisted:
+
+| Model | Quant | pp512 | tg128 | #91 predicted tg128 |
+| --- | --- | --- | --- | --- |
+| Qwen3-Coder-30B-A3B-Instruct | Q4_K_S | 1430.11 ± 19.32 t/s | 97.38 ± 0.23 t/s | ~98 t/s |
+| Qwen3.6-35B-A3B | UD-Q4_K_S | 1249.47 ± 10.44 t/s | 64.65 ± 0.10 t/s | ~62 t/s (non-speculative) |
+| Qwen3-Coder-Next-80B-A3B | IQ4_XS | 750.09 ± 6.97 t/s | 63.02 ± 0.10 t/s | ~62 t/s |
+
+All three land within a few percent of #91's own predictions, confirming
+the model/quant shortlist on real hardware. Mesa `26.2.2~kisak1~n`, already
+installed on this host via the `kisak-mesa` PPA, ran all three cleanly at
+full GPU offload - a reasonable starting point for
+`gpu_inference_host_mesa_pinned_version`, though it hasn't yet been
+benchmarked against the gaming workload it's shared with.
+
+`gpu_inference_host_expected_product_name` has also been confirmed against
+the live host's `/sys/class/dmi/id/product_name` (no sudo needed - the
+file is world-readable) - see the PR for the exact value rather than
+committing a real hardware identifier here.
+
+These numbers were captured with the physical console sitting at the
+LightDM greeter (Xorg running, but no user logged into a Cinnamon session)
+- neither of the two states this section actually asks about. The
+X11-vs-Wayland comparison below is therefore still genuinely open; both
+`cinnamon.desktop` (X11) and `cinnamon-wayland.desktop` (Wayland) are
+available at the greeter's session picker on this host, so the comparison
+is mechanically possible, it just needs someone logged in locally under
+each session while the benchmark runs over SSH.
+
+X11 vs Wayland is an open decision, not a default: setup guides for this
+hardware recommend X11 for serving, but the box also games and modern
+gaming increasingly wants Wayland. Benchmark both plus a subjective gaming
+check before choosing.
+
+That choice is a config value, not a fork: `gpu_inference_host_display_session`
+(`"x11"`, `"wayland"`, or empty - the default, which leaves the greeter's
+session choice untouched). Once the benchmark above settles it, setting this
+var makes the role configure the greeter's default session to match, via a
+`/etc/lightdm/lightdm.conf.d/` drop-in - `gpu_inference_host_display_session_name_x11`/
+`_name_wayland` map the choice to this host's actual Cinnamon session names,
+so a future host on a different desktop environment just overrides those two,
+not the role itself. Deliberately not two long-lived branches: this is one
+runtime setting on an otherwise-identical role, and a host's answer can
+change later (a Mesa/kernel Wayland improvement, a different box entirely)
+without re-merging anything.
+
+No cgroup memory enforcement yet - there is no inference workload to bound
+until #91's app slice lands. For planning, a ~46GB model plus a game's
+working set fits the confirmed 96GB BIOS VGM split; revisit only if memory
+pressure actually appears.
+
 ### Host Disk Pressure Check
 
 Run the read-only host disk check before or during cluster triage, and
@@ -1230,6 +1327,7 @@ This is the backlog for moving from production-like to high availability:
 ## File Map
 
 - k3s production bootstrap playbook: `ansible/setup_k3s_production.yml`
+- GPU inference host prep role (#91/#92): `ansible/roles/gpu_inference_host/*`
 - Argo platform install: `kubernetes/platform/argocd/*`
 - Cloudflare Tunnel edge deployment: `kubernetes/platform/cloudflared/*`
 - GitOps apps/root: `kubernetes/gitops/*`
