@@ -27,7 +27,6 @@ resolve_extras_ca_symlink: true
 
 # k3s workload toggles
 enable_k3s: true
-enable_localai: true
 enable_wisemapping: true
 k3s_version: "v1.35.3+k3s1"
 
@@ -89,6 +88,5 @@ require_external_https: true
 direct_http_urls: []
 
 # Workload config is now manifest-first:
-#   kubernetes/apps/localai/standalone.yaml
 #   kubernetes/apps/wisemapping/standalone.yaml
 #   kubernetes/apps/leantime/demo-standalone.yaml
