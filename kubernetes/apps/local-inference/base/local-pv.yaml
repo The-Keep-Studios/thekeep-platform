@@ -1,44 +1,32 @@
-# Every other app in this platform relies on k3s's default dynamic
-# local-path-provisioner (no hardcoded host paths anywhere in git). This is
-# the one exception: the model cache is backed by a dedicated external
-# drive (a Framework expansion-card drive) instead of the node's root disk,
-# which was down to ~111G free - nowhere near enough for a 200Gi PVC
-# alongside every other app's storage.
+# The one exception to every other app's reliance on k3s's default
+# local-path-provisioner: the model cache needs a dedicated external drive,
+# not the root disk (only ~111G free, nowhere near enough for a 200Gi PVC).
 #
-# INTERIM, HOST-SPECIFIC SETUP - not yet the template other consumers of
-# this platform should copy. The path below is tied to this one box's
-# current session-scoped auto-mount (/media/iantsmall/movable, owned by a
-# personal user account) rather than a stable, non-personal system mount
-# point. Before this is treated as a finished design: move the drive to a
-# permanent /etc/fstab mount at a generic path (e.g. /mnt/model-cache) not
-# tied to any one user's session or username, and update the path below to
-# match. Left as NTFS (not reformatted) deliberately - non-destructive,
-# since the drive already had other data on it (an old backup, and a Steam
-# library) that wasn't worth risking to reformat for what a large-binary-file
-# read/write workload doesn't actually need from a native filesystem.
+# INTERIM, HOST-SPECIFIC - not yet the template other consumers should
+# copy. The path is tied to this box's personal, session-scoped auto-mount
+# (/media/iantsmall/movable); move it to a stable, non-personal
+# /etc/fstab mount (e.g. /mnt/model-cache) before treating this as final.
+# Left as NTFS deliberately (non-destructive - the drive already held other
+# data), which a large-binary-file cache doesn't need a native fs for anyway.
 apiVersion: v1
 kind: PersistentVolume
 metadata:
   name: local-inference-model-cache
 spec:
   capacity:
-    # Must match the PVC's request exactly - local PVs bind by exact/larger
-    # capacity, and there's no dynamic provisioner here to resize.
+    # Must match the PVC's request - no provisioner here to resize it.
     storage: 200Gi
   accessModes:
   - ReadWriteOnce
-  # Retain, not Delete: there's no controller wired to actually clean up a
-  # static local PV's underlying directory on release, so Delete would just
-  # leave the PV stuck Failed. Retain matches this repo's existing stance
-  # that these weights aren't durable data anyway (reproducible via
-  # re-download) - nothing here needs an automated reclaim path.
+  # Retain, not Delete: no controller is wired to clean up a static local
+  # PV's directory on release (Delete would just strand it Failed), and
+  # these weights aren't durable data anyway (re-downloadable).
   persistentVolumeReclaimPolicy: Retain
   storageClassName: local-inference-model-cache
   local:
     path: /media/iantsmall/movable/model-cache
-  # Required for the local volume type: pins this PV to the one node the
-  # directory actually exists on. Only ever matters if this becomes a
-  # multi-node cluster later - today's cluster is single-node.
+  # Pins the PV to the node the directory actually exists on - required
+  # for the local volume type, moot until this is a multi-node cluster.
   nodeAffinity:
     required:
       nodeSelectorTerms:
@@ -52,10 +40,9 @@ apiVersion: storage.k8s.io/v1
 kind: StorageClass
 metadata:
   name: local-inference-model-cache
-# no-provisioner: this StorageClass exists only so the PVC below can name
-# it and bind to the static PV above - nothing dynamically provisions here.
+# Exists only so the PVC can name it and bind to the static PV above -
+# nothing dynamically provisions here.
 provisioner: kubernetes.io/no-provisioner
-# WaitForFirstConsumer: don't bind until the pod that will use it is
-# actually scheduled - matters little on a single-node cluster, but it's
-# the correct setting for any local-storage-backed class regardless.
+# Correct default for any local-storage class - don't bind before the
+# consuming pod is scheduled, though it matters little on one node.
 volumeBindingMode: WaitForFirstConsumer

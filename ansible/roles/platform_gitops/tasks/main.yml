@@ -363,11 +363,8 @@
         password: "{{ platform_secrets.monitoring_basic_auth_password | default(platform_secrets.grafana_admin_password) }}"
     - name: local-inference-api-key
       namespace: local-inference
-      # Own credential - never falls back to monitoring/grafana's basic-auth pair.
-      # Checked by llama-swap itself (its own apiKeys config, matching the
-      # OpenAI "Authorization: Bearer <key>" convention every OpenAI-compatible
-      # client - JetBrains AI Assistant, Continue, etc. - expects natively), not
-      # by a Traefik middleware.
+      # Own credential, never falls back to monitoring/grafana's. Checked
+      # by llama-swap's own apiKeys config, not a Traefik middleware.
       enabled: "{{ ((platform_optional_apps | default({})).local_inference | default({})).enabled | default(false) | bool }}"
       data:
         API_KEY: "{{ platform_secrets.local_inference_api_key | default('') }}"
