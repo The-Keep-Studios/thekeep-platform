@@ -117,9 +117,8 @@
     dest: /etc/lightdm/lightdm.conf.d/60-gpu-inference-host-session.conf
     mode: "0644"
     content: |
-      # Managed by thekeep-platform's gpu_inference_host role. Set via
-      # gpu_inference_host_display_session once a real X11-vs-Wayland
-      # llama-bench comparison settles #92's open decision on this host.
+      # Managed by thekeep-platform's gpu_inference_host role
+      # (gpu_inference_host_display_session).
       [Seat:*]
       user-session={{ gpu_inference_host_display_session_name_wayland if gpu_inference_host_display_session == 'wayland' else gpu_inference_host_display_session_name_x11 }}
   when: gpu_inference_host_display_session | trim | length > 0
