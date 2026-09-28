@@ -1,0 +1,64 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: local-inference-models
+  namespace: local-inference
+data:
+  # llama-swap config: https://github.com/mostlygeek/llama-swap
+  config.yaml: |
+    # No groups/routing below, so llama-swap's default applies: one model
+    # resident at a time, swapping on demand - hot-swap instead of pinning
+    # 60GB permanently on a node that also serves games (#91).
+    logLevel: info
+    # Default is 120s; unbenchmarked starting point for a 46GB weight file's
+    # load time (#91's acceptance criteria wants real evidence here).
+    healthCheckTimeout: 300
+
+    # Authorization: Bearer <key> - what OpenAI-compatible clients (JetBrains
+    # AI Assistant, Continue, etc.) send natively. Value comes from
+    # LOCAL_INFERENCE_API_KEY (production.yaml), sourced from the
+    # local-inference-api-key Secret - never baked in here.
+    apiKeys:
+      - "${env.LOCAL_INFERENCE_API_KEY}"
+
+    models:
+      # Filenames below are confirmed real (llama-bench'd on the actual
+      # host - see #108's README evidence), one per unsloth GGUF repo.
+      "qwen3-coder-next-80b-a3b":
+        name: "Qwen3-Coder-Next 80B-A3B (IQ4_XS)"
+        description: "Primary agentic/coding seat, ~46GB resident"
+        cmd: |
+          llama-server
+          --port ${PORT}
+          --model /models/Qwen3-Coder-Next-IQ4_XS.gguf
+          --ctx-size 32768
+          --n-gpu-layers 999
+        # mmap stays on: this seat unloads/reloads daily via ttl, so eager
+        # loading (--no-mmap) is the wrong tradeoff here. ttl is an
+        # unbenchmarked starting point (#91's idle-TTL acceptance criteria).
+        ttl: 900
+
+      "qwen3.6-35b-a3b":
+        name: "Qwen3.6 35B-A3B (UD-Q4_K_S)"
+        description: "General assistant/triage seat, ~19.5GB resident"
+        cmd: |
+          llama-server
+          --port ${PORT}
+          --model /models/Qwen3.6-35B-A3B-UD-Q4_K_S.gguf
+          --ctx-size 32768
+          --n-gpu-layers 999
+        ttl: 900
+
+      "qwen3-coder-30b-a3b":
+        name: "Qwen3-Coder-30B-A3B-Instruct (Q4_K_S)"
+        description: "Fast/cheap classification seat, ~16GB resident"
+        cmd: |
+          llama-server
+          --port ${PORT}
+          --model /models/Qwen3-Coder-30B-A3B-Instruct-Q4_K_S.gguf
+          --ctx-size 8192
+          --n-gpu-layers 999
+        # Shorter context than the other two seats: classification prompts
+        # are short, and this seat leaves more headroom for whichever
+        # heavier seat is also resident during a swap.
+        ttl: 900

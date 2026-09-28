@@ -1,0 +1,48 @@
+# The one exception to every other app's reliance on k3s's default
+# local-path-provisioner: the model cache needs a dedicated external drive,
+# not the root disk (only ~111G free, nowhere near enough for a 200Gi PVC).
+#
+# INTERIM, HOST-SPECIFIC - not yet the template other consumers should
+# copy. The path is tied to this box's personal, session-scoped auto-mount
+# (/media/iantsmall/movable); move it to a stable, non-personal
+# /etc/fstab mount (e.g. /mnt/model-cache) before treating this as final.
+# Left as NTFS deliberately (non-destructive - the drive already held other
+# data), which a large-binary-file cache doesn't need a native fs for anyway.
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: local-inference-model-cache
+spec:
+  capacity:
+    # Must match the PVC's request - no provisioner here to resize it.
+    storage: 200Gi
+  accessModes:
+  - ReadWriteOnce
+  # Retain, not Delete: no controller is wired to clean up a static local
+  # PV's directory on release (Delete would just strand it Failed), and
+  # these weights aren't durable data anyway (re-downloadable).
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: local-inference-model-cache
+  local:
+    path: /media/iantsmall/movable/model-cache
+  # Pins the PV to the node the directory actually exists on - required
+  # for the local volume type, moot until this is a multi-node cluster.
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+      - matchExpressions:
+        - key: thekeep.studio/accelerator
+          operator: In
+          values:
+          - strix-halo
+---
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: local-inference-model-cache
+# Exists only so the PVC can name it and bind to the static PV above -
+# nothing dynamically provisions here.
+provisioner: kubernetes.io/no-provisioner
+# Correct default for any local-storage class - don't bind before the
+# consuming pod is scheduled, though it matters little on one node.
+volumeBindingMode: WaitForFirstConsumer

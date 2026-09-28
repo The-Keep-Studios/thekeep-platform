@@ -1,0 +1,27 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: local-inference-ingress
+  namespace: local-inference
+  annotations:
+    # #91: no Traefik auth Middleware - llama-swap checks its own apiKeys
+    # (Authorization: Bearer <key>) instead. Not sufficient alone for a
+    # public hostname though: this overlay only applies when
+    # public_access_enabled + public_access_cloudflare_access_confirmed are
+    # both true - a human attestation that Cloudflare Access already
+    # protects this hostname before it's added to the tunnel.
+    traefik.ingress.kubernetes.io/service.serversscheme: http
+spec:
+  rules:
+  # PROPOSED hostname (#91, unconfirmed). Registering it - the tunnel entry
+  # and the Access policy - is a manual step, not performed by any PR.
+  - host: inference.thekeepstudios.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: local-inference
+            port:
+              number: 8080

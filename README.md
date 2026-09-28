@@ -19,6 +19,7 @@ It uses Ansible to provision machines, k3s to run workloads, and Argo CD to keep
 - [Auth, OIDC, And Routing Notes](#auth-oidc-and-routing-notes)
 - [Optional CRM And Assistant](#optional-crm-and-assistant)
 - [GPU Inference Host Prep (Strix Halo)](#gpu-inference-host-prep-strix-halo)
+- [Local Inference (Strix Halo)](#local-inference-strix-halo)
 - [Host Disk Pressure Check](#host-disk-pressure-check)
 - [k3s DiskPressure Recovery Runbook](#k3s-diskpressure-recovery-runbook)
 - [Planned Hardening](#planned-hardening)
@@ -1116,30 +1117,27 @@ enabling the role):
   keeping the role from running on an unconfirmed machine.
 
 Mesa/RADV is pinned from the `kisak-mesa` PPA and held via
-`dpkg_selections` so unattended upgrades can't move it. Benchmark before
-pinning a version - this Mesa build is shared with the gaming workload on
-the same node (see #91), so a bump chased for one side can regress the
-other.
+`dpkg_selections`. Benchmark before pinning a version - this Mesa build is
+shared with the gaming workload on the same node, so a bump for one side
+can regress the other.
 
 Node label `thekeep.studio/accelerator=strix-halo` is applied once k3s is
-present. gfx1151 has no clean `amd.com/gpu` device-plugin story, so a future
-inference workload targets this node with a `nodeSelector` against this
-label, not an extended resource.
+present. gfx1151 has no clean `amd.com/gpu` device-plugin story, so a
+future workload targets this node via `nodeSelector`, not an extended
+resource.
 
-Benchmark command template - run under both X11 and Wayland sessions:
+Benchmark command template:
 
 ```bash
 llama-bench -m <model.gguf> -b <backend, e.g. Vulkan> -ngl 999
 ```
 
-Record backend, model, quant, build number, and exact flags alongside the
-t/s result; a number without the command isn't evidence.
+Record backend, model, quant, build number, and exact flags with the t/s
+result - a number without the command isn't evidence.
 
-Real evidence gathered against the host over SSH (prebuilt `llama.cpp`
-Vulkan release, build `38a5b42d9` / b10989, `AMD Radeon 8060S Graphics
-(RADV STRIX_HALO)`, Mesa `26.2.2~kisak1~n` from `kisak-mesa`,
-`llama-bench -m <model.gguf> -ngl 999`) for all three models #91
-shortlisted:
+Real evidence gathered over SSH (prebuilt `llama.cpp` Vulkan, build
+`38a5b42d9` / b10989, `AMD Radeon 8060S Graphics (RADV STRIX_HALO)`, Mesa
+`26.2.2~kisak1~n`) for all three models #91 shortlisted:
 
 | Model | Quant | pp512 | tg128 | #91 predicted tg128 |
 | --- | --- | --- | --- | --- |
@@ -1147,48 +1145,152 @@ shortlisted:
 | Qwen3.6-35B-A3B | UD-Q4_K_S | 1249.47 ± 10.44 t/s | 64.65 ± 0.10 t/s | ~62 t/s (non-speculative) |
 | Qwen3-Coder-Next-80B-A3B | IQ4_XS | 750.09 ± 6.97 t/s | 63.02 ± 0.10 t/s | ~62 t/s |
 
-All three land within a few percent of #91's own predictions, confirming
-the model/quant shortlist on real hardware. Mesa `26.2.2~kisak1~n`, already
-installed on this host via the `kisak-mesa` PPA, ran all three cleanly at
-full GPU offload - a reasonable starting point for
-`gpu_inference_host_mesa_pinned_version`, though it hasn't yet been
-benchmarked against the gaming workload it's shared with.
+All three land within a few percent of prediction, confirming the shortlist
+on real hardware. Mesa `26.2.2~kisak1~n` ran all three cleanly at full
+offload - a reasonable `gpu_inference_host_mesa_pinned_version` candidate,
+not yet benchmarked against the gaming workload. `gpu_inference_host_expected_product_name`
+is also confirmed (via the host's `/sys/class/dmi/id/product_name`, no
+sudo needed) - see the PR for the value rather than committing a real
+hardware identifier here.
 
-`gpu_inference_host_expected_product_name` has also been confirmed against
-the live host's `/sys/class/dmi/id/product_name` (no sudo needed - the
-file is world-readable) - see the PR for the exact value rather than
-committing a real hardware identifier here.
-
-These numbers were captured with the physical console sitting at the
-LightDM greeter (Xorg running, but no user logged into a Cinnamon session)
-- neither of the two states this section actually asks about. The
-X11-vs-Wayland comparison below is therefore still genuinely open; both
-`cinnamon.desktop` (X11) and `cinnamon-wayland.desktop` (Wayland) are
-available at the greeter's session picker on this host, so the comparison
-is mechanically possible, it just needs someone logged in locally under
-each session while the benchmark runs over SSH.
-
-X11 vs Wayland is an open decision, not a default: setup guides for this
-hardware recommend X11 for serving, but the box also games and modern
-gaming increasingly wants Wayland. Benchmark both plus a subjective gaming
-check before choosing.
+X11 vs Wayland is still open - the benchmark above ran with nobody logged
+into a desktop session (just the LightDM greeter), neither state this
+decision actually needs. Setup guides recommend X11 for serving, but the
+box also games and modern gaming wants Wayland; benchmark both plus a
+subjective gaming check before choosing.
 
 That choice is a config value, not a fork: `gpu_inference_host_display_session`
-(`"x11"`, `"wayland"`, or empty - the default, which leaves the greeter's
-session choice untouched). Once the benchmark above settles it, setting this
-var makes the role configure the greeter's default session to match, via a
-`/etc/lightdm/lightdm.conf.d/` drop-in - `gpu_inference_host_display_session_name_x11`/
-`_name_wayland` map the choice to this host's actual Cinnamon session names,
-so a future host on a different desktop environment just overrides those two,
-not the role itself. Deliberately not two long-lived branches: this is one
-runtime setting on an otherwise-identical role, and a host's answer can
-change later (a Mesa/kernel Wayland improvement, a different box entirely)
-without re-merging anything.
+(`"x11"`/`"wayland"`/empty default, which leaves the greeter alone). Setting
+it makes the role configure the greeter's default session via a
+`/etc/lightdm/lightdm.conf.d/` drop-in; `_display_session_name_x11`/
+`_name_wayland` map the choice to this host's Cinnamon session names, so a
+different DE overrides just those two. One runtime setting, not two
+branches - a changed answer later is just a different value.
 
-No cgroup memory enforcement yet - there is no inference workload to bound
-until #91's app slice lands. For planning, a ~46GB model plus a game's
-working set fits the confirmed 96GB BIOS VGM split; revisit only if memory
-pressure actually appears.
+No cgroup memory enforcement yet - nothing to bound until #91's app slice
+lands. A ~46GB model plus a game's working set fits the confirmed 96GB
+BIOS VRAM split; revisit only if memory pressure actually appears.
+
+### Local Inference (Strix Halo)
+
+App-layer slice for #91, building on the host prep above (#92):
+`kubernetes/apps/local-inference/*` plus the matching Ansible/monitoring/
+validation wiring below. Everything stays inert until a human deliberately
+sets `platform_optional_apps.local_inference.enabled: true` and fills in
+its required secrets - this Kubernetes app has not been applied to the
+real Strix Halo host yet.
+
+The GPU access path and all three shortlisted models it configures do now
+have real hardware evidence, though - see "Real hardware evidence" under
+[GPU Inference Host Prep](#gpu-inference-host-prep-strix-halo) above for
+the `llama-bench` numbers. That evidence is bare `llama.cpp` run directly
+on the host, not through this app's `llama-swap` container, so the
+Deployment/PVC/Service here are still unverified end-to-end.
+
+**Model cache is backed by a dedicated external drive, not the node's root
+disk** - the root disk had only ~111G free, nowhere near enough for a 200Gi
+PVC. `local-pv.yaml` statically provisions 200Gi against a Framework
+expansion-card drive instead (~505G free), via a `local` PersistentVolume
+and its own no-provisioner `StorageClass` - the one exception to every
+other app relying on k3s's default dynamic local-path provisioner. This is
+interim and host-specific: the path is tied to this box's session-scoped
+auto-mount and a personal username, and the drive stays NTFS (it already
+held other data not worth risking to reformat, for a workload that doesn't
+need a native filesystem anyway). Move to a permanent, non-personal
+`/etc/fstab` mount before treating this as the template other consumers
+would copy.
+
+```yaml
+platform_optional_apps:
+  local_inference:
+    enabled: false
+```
+
+Required secret once enabled, in ignored `ansible/production_vars.yml` -
+this is the service's own credential, not a fallback to Grafana's
+basic-auth pair:
+
+```yaml
+platform_secrets:
+  local_inference_api_key: "CHANGE_ME"
+```
+
+**No public hostname by default - LAN and in-cluster only.**
+`kubernetes/apps/local-inference/base` (applied whenever `enabled: true`)
+never adds an Ingress or a hostname. Reachable two ways: **in-cluster** via
+the Service's cluster DNS name, the same pattern the EspoCRM assistant
+uses; and on the **LAN** via a `NodePort` (`30880`) bound to the node's own
+network interfaces - a trusted device like a workstation running JetBrains
+AI Assistant can reach `http://<node-lan-ip>:30880` directly, and nothing
+here forwards that port to the public internet.
+
+`llama-swap`'s own `apiKeys` check (`Authorization: Bearer <key>`, the
+convention every OpenAI-compatible client speaks natively - an earlier
+draft used Traefik BasicAuth, but that's not what these clients send)
+gates every request either way - it matters more on the LAN path, since
+any device on the network can reach the NodePort, not just yours. Worth
+being precise about the threat model: this is a text-in/text-out
+completion endpoint, not an agent with host access - it cannot execute
+commands on the node regardless of who holds the key. The key protects
+against unauthorized *use* (burning GPU time, reaching a model you weren't
+meant to). Separately, the container runs `privileged: true` with raw
+`/dev/kfd`/`/dev/dri` access (gfx1151 has no clean device-plugin story) -
+a narrower container-escape concern tied to the pod's security context,
+unrelated to what a prompt can do. Do not attach
+`identity-authentik-forward-auth` here even if a public path is added
+later - forward-auth is a browser redirect flow and can't serve a
+non-interactive client.
+
+**A public hostname is opt-in and requires a real Cloudflare Access policy
+first - not just built and left disabled.**
+`public_access_enabled: true` switches the Argo Application's source path
+from `base` to `overlays/public-access`, layering an Ingress + the
+proposed `inference.thekeepstudios.com` hostname on top. It also requires
+`public_access_cloudflare_access_confirmed: true` - self-attestation that
+a Cloudflare Access policy (Zero Trust -> Access -> Applications) already
+protects that hostname *before* it's added to the tunnel. Ansible can't
+verify a Cloudflare dashboard setting, so `setup_k3s_production.yml` just
+refuses to run without the confirmation - honesty-based, not enforced.
+Registering the hostname itself is a manual step, same as "Cloudflare
+Prerequisite" above.
+
+```yaml
+platform_optional_apps:
+  local_inference:
+    enabled: true
+    public_access_enabled: false   # opt-in, on top of the LAN/in-cluster default
+    public_access_cloudflare_access_confirmed: false   # required if the line above is true
+```
+
+The llama-swap API key still applies on the public path - Access and the
+app-level key layer, they don't substitute for each other.
+
+Yielding to the gaming workload uses two mechanisms from #91. `llama-swap`'s
+idle TTL unloads models automatically and is the primary mechanism - the pod
+and `/v1/models` stay up through an unload, so an idle evening does not read
+as an outage. For a hard guarantee before a heavy title, a Steam launch
+option can force an unload first:
+
+```
+bash -c 'curl -fsS -X POST http://<svc>/unload || true; %command%'
+```
+
+`|| true` is deliberate: a broken or unreachable curl must fail open and
+never block a game from starting.
+
+Rollback: set `enabled: false` and apply. Like the rest of this repo's
+GitOps apps, `platform-local-inference` syncs with `prune: false` -
+disabling the flag drops it from the rendered Application set but does
+**not** delete anything. Remove the orphaned resources manually: `kubectl
+delete -k kubernetes/apps/local-inference/base` (or `overlays/public-access`,
+whichever was last applied - check `kubectl get application
+platform-local-inference -n argocd -o jsonpath='{.spec.source.path}'` if
+unsure) plus `kubectl delete application platform-local-inference -n
+argocd`. Disabling just `public_access_enabled` (leaving `enabled: true`)
+is narrower - it switches back to `base` on next sync but similarly leaves
+the Ingress orphaned; delete it with `kubectl delete -k
+kubernetes/apps/local-inference/overlays/public-access` if turning off the
+public path deliberately.
 
 ### Host Disk Pressure Check
 
@@ -1328,6 +1430,7 @@ This is the backlog for moving from production-like to high availability:
 
 - k3s production bootstrap playbook: `ansible/setup_k3s_production.yml`
 - GPU inference host prep role (#91/#92): `ansible/roles/gpu_inference_host/*`
+- Local inference app manifests (#91, disabled by default): `kubernetes/apps/local-inference/*`
 - Argo platform install: `kubernetes/platform/argocd/*`
 - Cloudflare Tunnel edge deployment: `kubernetes/platform/cloudflared/*`
 - GitOps apps/root: `kubernetes/gitops/*`
